@@ -98,6 +98,16 @@ npm run test             # 测试
 npm run validate         # lint + build + test
 ```
 
+## GitHub 自动发布 npm
+
+仓库已提供 workflow：`.github/workflows/npm-publish.yml`
+
+- 触发方式：
+  - 手动触发 `workflow_dispatch`
+  - 推送 tag（如 `v1.0.1`）
+- 发布前会执行：`npm ci`、`npm run build`、`npm run test:integration`
+- 需要在仓库 Secrets 配置：`NPM_TOKEN`
+
 ## 注意
 
 - `figma-plugin/code.js` 是由 `figma-plugin/code.ts` 编译生成，请改 TS 不直接改 JS。
