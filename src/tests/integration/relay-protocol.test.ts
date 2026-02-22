@@ -5,10 +5,6 @@ import { EmbeddedRelay } from '../../runtime/embedded-relay.js';
 
 const TEST_HOST = '127.0.0.1';
 
-function randomPort(): number {
-  return 35000 + Math.floor(Math.random() * 20000);
-}
-
 function waitForMessage(ws: WebSocket, timeoutMs = 5000): Promise<any> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -63,11 +59,47 @@ function waitForClose(ws: WebSocket, timeoutMs = 5000): Promise<{ code: number; 
       clearTimeout(timeout);
       resolve({ code, reason: reason.toString('utf8') });
     });
+
+    ws.once('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
   });
 }
 
-async function startRelayOrSkip(t: { skip: (message?: string) => void }, port: number): Promise<EmbeddedRelay | null> {
-  const relay = new EmbeddedRelay({ host: TEST_HOST, port });
+async function closeSocketGracefully(ws: WebSocket | null, timeoutMs = 2000): Promise<void> {
+  if (!ws || ws.readyState === WebSocket.CLOSED) return;
+
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(() => {
+      try {
+        ws.terminate();
+      } catch {
+        // ignore
+      }
+      resolve();
+    }, timeoutMs);
+
+    ws.once('close', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+
+    try {
+      if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      } else if (ws.readyState === WebSocket.CLOSING) {
+        // wait for close event
+      }
+    } catch {
+      clearTimeout(timeout);
+      resolve();
+    }
+  });
+}
+
+async function startRelayOrSkip(t: { skip: (message?: string) => void }): Promise<EmbeddedRelay | null> {
+  const relay = new EmbeddedRelay({ host: TEST_HOST, port: 0 });
   try {
     await relay.start();
     return relay;
@@ -81,19 +113,13 @@ async function startRelayOrSkip(t: { skip: (message?: string) => void }, port: n
 }
 
 describe('Relay Protocol Compatibility', () => {
-  if (process.env.CI === 'true') {
-    // Flaky in GitHub-hosted runners due node:test worker/ws serialization edge case.
-    // Kept enabled for local integration verification.
-    return;
-  }
-
   let relay: EmbeddedRelay | null = null;
   let figmaWs: WebSocket | null = null;
   let clientWs: WebSocket | null = null;
 
   afterEach(async () => {
-    if (figmaWs && figmaWs.readyState === WebSocket.OPEN) figmaWs.close();
-    if (clientWs && clientWs.readyState === WebSocket.OPEN) clientWs.close();
+    await closeSocketGracefully(figmaWs);
+    await closeSocketGracefully(clientWs);
     figmaWs = null;
     clientWs = null;
     if (relay) {
@@ -103,11 +129,11 @@ describe('Relay Protocol Compatibility', () => {
   });
 
   it('keeps legacy flow: figma connects without channel and receives generated channel', async (t) => {
-    const port = randomPort();
-    relay = await startRelayOrSkip(t, port);
+    relay = await startRelayOrSkip(t);
     if (!relay) return;
+    const relayUrl = relay.getWebSocketUrl();
 
-    figmaWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
+    figmaWs = createTestWebSocket(`${relayUrl}?type=figma`);
     const firstMsgPromise = waitForMessage(figmaWs);
     await waitForOpen(figmaWs);
     const firstMsg = await firstMsgPromise;
@@ -118,17 +144,17 @@ describe('Relay Protocol Compatibility', () => {
   });
 
   it('keeps legacy flow: MCP client binds to existing channel and gets figmaConnected=true', async (t) => {
-    const port = randomPort();
-    relay = await startRelayOrSkip(t, port);
+    relay = await startRelayOrSkip(t);
     if (!relay) return;
+    const relayUrl = relay.getWebSocketUrl();
 
-    figmaWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
+    figmaWs = createTestWebSocket(`${relayUrl}?type=figma`);
     const figmaConnectedMsgPromise = waitForMessage(figmaWs);
     await waitForOpen(figmaWs);
     const figmaConnectedMsg = await figmaConnectedMsgPromise;
     const channel = figmaConnectedMsg.channel;
 
-    clientWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=client&channel=${channel}`);
+    clientWs = createTestWebSocket(`${relayUrl}?type=client&channel=${channel}`);
     const clientConnectedMsgPromise = waitForMessage(clientWs);
     await waitForOpen(clientWs);
     const clientConnectedMsg = await clientConnectedMsgPromise;
@@ -140,28 +166,29 @@ describe('Relay Protocol Compatibility', () => {
   });
 
   it('rejects client connection without channel (workflow requires channel bind)', async (t) => {
-    const port = randomPort();
-    relay = await startRelayOrSkip(t, port);
+    relay = await startRelayOrSkip(t);
     if (!relay) return;
+    const relayUrl = relay.getWebSocketUrl();
 
-    clientWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=client`);
+    clientWs = createTestWebSocket(`${relayUrl}?type=client`);
     const close = await waitForClose(clientWs);
+    clientWs = null;
 
     assert.strictEqual(close.code, 4000);
   });
 
   it('notifies clients when figma disconnects', async (t) => {
-    const port = randomPort();
-    relay = await startRelayOrSkip(t, port);
+    relay = await startRelayOrSkip(t);
     if (!relay) return;
+    const relayUrl = relay.getWebSocketUrl();
 
-    figmaWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
+    figmaWs = createTestWebSocket(`${relayUrl}?type=figma`);
     const figmaConnectedMsgPromise = waitForMessage(figmaWs);
     await waitForOpen(figmaWs);
     const figmaConnectedMsg = await figmaConnectedMsgPromise;
     const channel = figmaConnectedMsg.channel;
 
-    clientWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=client&channel=${channel}`);
+    clientWs = createTestWebSocket(`${relayUrl}?type=client&channel=${channel}`);
     const initialClientConnectedPromise = waitForMessage(clientWs);
     await waitForOpen(clientWs);
     await initialClientConnectedPromise; // initial connected

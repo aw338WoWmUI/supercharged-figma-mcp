@@ -17,6 +17,7 @@ export class EmbeddedRelay {
   private readonly options: EmbeddedRelayOptions;
   private readonly channels = new Map<string, RelayChannel>();
   private wss: WebSocketServer | null = null;
+  private boundPort: number | null = null;
 
   constructor(options: EmbeddedRelayOptions) {
     this.options = options;
@@ -25,7 +26,8 @@ export class EmbeddedRelay {
   getWebSocketUrl(): string {
     const displayHost = this.options.host.includes(':') ? `[${this.options.host}]` : this.options.host;
     const path = this.normalizePath(this.options.path ?? '/');
-    return `ws://${displayHost}:${this.options.port}${path}`;
+    const port = this.boundPort ?? this.options.port;
+    return `ws://${displayHost}:${port}${path}`;
   }
 
   async start(): Promise<void> {
@@ -46,6 +48,10 @@ export class EmbeddedRelay {
       };
 
       wss.on('listening', () => {
+        const addr = wss.address();
+        if (addr && typeof addr === 'object') {
+          this.boundPort = addr.port;
+        }
         console.log(chalk.green('✓ Embedded Relay started'));
         console.log(chalk.gray(`  Relay endpoint: ${this.getWebSocketUrl()}`));
         resolve();
@@ -87,6 +93,7 @@ export class EmbeddedRelay {
       }
       wss.close(() => resolve());
     });
+    this.boundPort = null;
     this.channels.clear();
   }
 
