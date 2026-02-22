@@ -5,6 +5,7 @@
   "main": "dist/server.js",
   "type": "module",
   "files": [
+    "bin/supercharged-figma-mcp.js",
     "dist/server.js",
     "dist/enhanced-batch-operations.js",
     "dist/progress-manager.js",
@@ -20,7 +21,7 @@
     "setup-mcp.sh"
   ],
   "bin": {
-    "supercharged-figma-mcp": "./dist/server.js"
+    "supercharged-figma-mcp": "./bin/supercharged-figma-mcp.js"
   },
   "scripts": {
     "build": "tsc",
