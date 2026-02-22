@@ -32,5 +32,17 @@ jobs:
       - name: Unit + Integration tests
         run: npm run test:integration
 
+      - name: Verify npm version is unpublished
+        run: |
+          PKG_NAME="$(node -p "require('./package.json').name")"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if npm view "${PKG_NAME}@${PKG_VERSION}" version >/dev/null 2>&1; then
+            echo "Version already exists on npm: ${PKG_NAME}@${PKG_VERSION}"
+            echo "Bump package version before publishing."
+            exit 1
+          fi
+
       - name: Publish to npm
         run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ""

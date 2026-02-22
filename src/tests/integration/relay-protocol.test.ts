@@ -46,6 +46,13 @@ function waitForOpen(ws: WebSocket, timeoutMs = 5000): Promise<void> {
   });
 }
 
+function createTestWebSocket(url: string): WebSocket {
+  const ws = new WebSocket(url);
+  // Prevent unhandled "error" events from crashing node:test worker process.
+  ws.on('error', () => {});
+  return ws;
+}
+
 function waitForClose(ws: WebSocket, timeoutMs = 5000): Promise<{ code: number; reason: string }> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -94,7 +101,7 @@ describe('Relay Protocol Compatibility', () => {
     relay = await startRelayOrSkip(t, port);
     if (!relay) return;
 
-    figmaWs = new WebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
+    figmaWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
     const firstMsgPromise = waitForMessage(figmaWs);
     await waitForOpen(figmaWs);
     const firstMsg = await firstMsgPromise;
@@ -109,13 +116,13 @@ describe('Relay Protocol Compatibility', () => {
     relay = await startRelayOrSkip(t, port);
     if (!relay) return;
 
-    figmaWs = new WebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
+    figmaWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
     const figmaConnectedMsgPromise = waitForMessage(figmaWs);
     await waitForOpen(figmaWs);
     const figmaConnectedMsg = await figmaConnectedMsgPromise;
     const channel = figmaConnectedMsg.channel;
 
-    clientWs = new WebSocket(`ws://${TEST_HOST}:${port}/?type=client&channel=${channel}`);
+    clientWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=client&channel=${channel}`);
     const clientConnectedMsgPromise = waitForMessage(clientWs);
     await waitForOpen(clientWs);
     const clientConnectedMsg = await clientConnectedMsgPromise;
@@ -131,7 +138,7 @@ describe('Relay Protocol Compatibility', () => {
     relay = await startRelayOrSkip(t, port);
     if (!relay) return;
 
-    clientWs = new WebSocket(`ws://${TEST_HOST}:${port}/?type=client`);
+    clientWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=client`);
     const close = await waitForClose(clientWs);
 
     assert.strictEqual(close.code, 4000);
@@ -142,13 +149,13 @@ describe('Relay Protocol Compatibility', () => {
     relay = await startRelayOrSkip(t, port);
     if (!relay) return;
 
-    figmaWs = new WebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
+    figmaWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=figma`);
     const figmaConnectedMsgPromise = waitForMessage(figmaWs);
     await waitForOpen(figmaWs);
     const figmaConnectedMsg = await figmaConnectedMsgPromise;
     const channel = figmaConnectedMsg.channel;
 
-    clientWs = new WebSocket(`ws://${TEST_HOST}:${port}/?type=client&channel=${channel}`);
+    clientWs = createTestWebSocket(`ws://${TEST_HOST}:${port}/?type=client&channel=${channel}`);
     const initialClientConnectedPromise = waitForMessage(clientWs);
     await waitForOpen(clientWs);
     await initialClientConnectedPromise; // initial connected
