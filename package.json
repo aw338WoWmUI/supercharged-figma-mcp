@@ -21,7 +21,7 @@
     "setup-mcp.sh"
   ],
   "bin": {
-    "supercharged-figma-mcp": "./bin/supercharged-figma-mcp.js"
+    "supercharged-figma-mcp": "bin/supercharged-figma-mcp.js"
   },
   "scripts": {
     "build": "tsc",
@@ -58,5 +58,13 @@
     "automation"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aw338WoWmUI/supercharged-figma-mcp"
+  },
+  "homepage": "https://github.com/aw338WoWmUI/supercharged-figma-mcp",
+  "bugs": {
+    "url": "https://github.com/aw338WoWmUI/supercharged-figma-mcp/issues"
+  }
 }
