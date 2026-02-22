@@ -1,0 +1,15 @@
+{
+  "name": "Supercharged Figma AI",
+  "id": "123456789",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui-enhanced.html",
+  "documentAccess": "dynamic-page",
+  "editorType": ["figma", "figjam"],
+  "enableProposedApi": true,
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "devAllowedDomains": ["*"],
+    "reasoning": "Connect to a local Relay Server during development only."
+  }
+}

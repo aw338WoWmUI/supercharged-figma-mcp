@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Supercharged Figma AI</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --ui-bg: var(--figma-color-bg, #ffffff);
+      --ui-bg-secondary: var(--figma-color-bg-secondary, #f5f5f5);
+      --ui-bg-tertiary: var(--figma-color-bg-tertiary, #e6e6e6);
+      --ui-border: var(--figma-color-border, #e6e6e6);
+      --ui-border-strong: var(--figma-color-border-strong, #2c2c2c);
+      --ui-text: var(--figma-color-text, #1f1f1f);
+      --ui-text-secondary: var(--figma-color-text-secondary, #6b6b6b);
+      --ui-text-tertiary: var(--figma-color-text-tertiary, #8c8c8c);
+      --ui-brand: var(--figma-color-bg-brand, #0d99ff);
+      --ui-brand-hover: var(--figma-color-bg-brand-hover, #007acc);
+      --ui-success: var(--figma-color-bg-success, #14ae5c);
+      --ui-warning: var(--figma-color-bg-warning, #ffcd29);
+      --ui-danger: var(--figma-color-bg-danger, #f24822);
+      --ui-info: var(--figma-color-text-brand, #0d99ff);
+      --ui-log-bg: var(--figma-color-bg-secondary, #f5f5f5);
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--ui-bg);
+      color: var(--ui-text);
+      padding: 8px;
+      line-height: 1.25;
+      font-size: 13px;
+      height: 100vh;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--ui-border);
+    }
+    
+    .header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      flex: 1;
+    }
+    
+    .status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ui-danger);
+      transition: all 0.3s;
+    }
+    
+    .status.connected {
+      background: var(--ui-success);
+      box-shadow: 0 0 8px var(--ui-success);
+    }
+    
+    .status.processing {
+      background: var(--ui-warning);
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .section {
+      margin-bottom: 8px;
+    }
+
+    #panel-config {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .config-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .config-footer {
+      flex-shrink: 0;
+      padding-top: 8px;
+      border-top: 1px solid var(--ui-border);
+      background: linear-gradient(
+        to top,
+        var(--ui-bg) 70%,
+        color-mix(in srgb, var(--ui-bg) 70%, transparent) 100%
+      );
+    }
+
+    .step-card {
+      margin-top: 8px;
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .step-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .step-badge {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--figma-color-text-onbrand, #fff);
+      background: var(--ui-brand);
+      border-radius: 999px;
+      padding: 2px 8px;
+      line-height: 1.2;
+    }
+
+    .step-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ui-text);
+    }
+    
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--ui-text-secondary);
+      margin-bottom: 6px;
+    }
+    
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      border-radius: 6px;
+      color: var(--ui-text);
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    
+    input[type="text"]:focus {
+      border-color: var(--ui-brand);
+    }
+    
+    button {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--ui-brand);
+      border: none;
+      border-radius: 6px;
+      color: var(--figma-color-text-onbrand, #ffffff);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 4px;
+    }
+    
+    button:hover {
+      background: var(--ui-brand-hover);
+      transform: translateY(-1px);
+    }
+    
+    button:disabled {
+      background: var(--ui-bg-tertiary);
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    button.secondary {
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      color: var(--ui-text);
+    }
+    
+    button.secondary:hover {
+      background: var(--ui-bg-tertiary);
+    }
+    
+    button.danger {
+      background: var(--ui-danger);
+    }
+    
+    button.danger:hover {
+      filter: brightness(0.92);
+    }
+    
+    /* 进度条样式 */
+    .progress-container {
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 8px;
+      display: none;
+    }
+    
+    .progress-container.active {
+      display: block;
+      animation: slideIn 0.3s ease;
+    }
+    
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    
+    .progress-title {
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
+    .progress-percentage {
+      font-size: 12px;
+      color: var(--ui-info);
+      font-weight: 600;
+    }
+    
+    .progress-bar-bg {
+      height: 5px;
+      background: var(--ui-bg-tertiary);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--ui-brand), var(--ui-success));
+      border-radius: 3px;
+      transition: width 0.18s ease;
+      position: relative;
+    }
+    
+    .progress-bar-fill::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255,255,255,0.3),
+        transparent
+      );
+      animation: shimmer 1.5s infinite;
+    }
+    
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    
+    .progress-details {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--ui-text-secondary);
+    }
+    
+    .progress-stage {
+      color: var(--ui-text-secondary);
+    }
+    
+    .progress-eta {
+      color: var(--ui-info);
+    }
+    
+    /* 统计卡片 */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    
+    .stat-item {
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      padding: 7px 6px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--ui-info);
+    }
+    
+    .stat-label {
+      font-size: 10px;
+      color: var(--ui-text-tertiary);
+      margin-top: 2px;
+      text-transform: uppercase;
+    }
+
+    .stats-source {
+      margin-top: -2px;
+      margin-bottom: 6px;
+      font-size: 10px;
+      color: var(--ui-text-tertiary);
+      text-align: center;
+    }
+    
+    /* 日志区域 */
+    .log-container {
+      background: var(--ui-log-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 7px;
+      background: var(--ui-bg-secondary);
+      border-bottom: 1px solid var(--ui-border);
+    }
+    
+    .log-title {
+      font-size: 9px;
+      color: var(--ui-text-tertiary);
+      text-transform: uppercase;
+    }
+
+    .log-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .log-clear {
+      font-size: 9px;
+      color: var(--ui-text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .log-clear:hover {
+      color: var(--ui-text);
+    }
+    
+    .log {
+      max-height: 132px;
+      overflow-y: auto;
+      padding: 4px 6px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 9px;
+    }
+    
+    .log-entry {
+      padding: 3px 0;
+      border-bottom: 1px solid var(--ui-border);
+      display: block;
+    }
+    
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+    
+    .log-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .log-time {
+      color: var(--ui-text-tertiary);
+      flex-shrink: 0;
+    }
+    
+    .log-message {
+      color: var(--ui-text-secondary);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .log-expand {
+      color: var(--ui-text-tertiary);
+      font-size: 9px;
+      width: 10px;
+      text-align: center;
+      flex-shrink: 0;
+      visibility: hidden;
+    }
+
+    .log-entry.expandable .log-expand {
+      visibility: visible;
+    }
+
+    .log-entry.expanded .log-expand {
+      transform: rotate(90deg);
+    }
+
+    .log-detail {
+      display: none;
+      margin-top: 3px;
+      margin-left: 56px;
+      color: var(--ui-text-tertiary);
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.2;
+      border-left: 1px solid var(--ui-border);
+      padding-left: 6px;
+      font-size: 9px;
+    }
+
+    .log-entry.expanded .log-detail {
+      display: block;
+    }
+    
+    .log-entry.success .log-message {
+      color: var(--ui-success);
+    }
+    
+    .log-entry.error .log-message {
+      color: var(--ui-danger);
+    }
+    
+    .log-entry.info .log-message {
+      color: var(--ui-info);
+    }
+    
+    .log-entry.warning .log-message {
+      color: var(--ui-warning);
+    }
+    
+    /* 操作列表 */
+    .operations-list {
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      border-radius: 8px;
+      padding: 6px;
+      margin-bottom: 8px;
+      max-height: 84px;
+      overflow-y: auto;
+    }
+
+    .operations-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 9px;
+      color: var(--ui-text-tertiary);
+    }
+
+    .operations-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .operations-action {
+      cursor: pointer;
+      user-select: none;
+      color: var(--ui-text-secondary);
+    }
+
+    .operations-action:hover {
+      color: var(--ui-text);
+    }
+
+    .op-group {
+      border: 1px solid var(--ui-border);
+      border-radius: 6px;
+      margin-bottom: 5px;
+      background: var(--ui-bg);
+      overflow: hidden;
+    }
+
+    .op-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .op-group-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      cursor: pointer;
+      background: var(--ui-bg-secondary);
+      border-bottom: 1px solid transparent;
+      font-size: 10px;
+    }
+
+    .op-group.expanded .op-group-head {
+      border-bottom-color: var(--ui-border);
+    }
+
+    .op-group-arrow {
+      font-size: 9px;
+      color: var(--ui-text-tertiary);
+      width: 10px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .op-group.expanded .op-group-arrow {
+      transform: rotate(90deg);
+    }
+
+    .op-group-name {
+      flex: 1;
+      color: var(--ui-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .op-group-stats {
+      color: var(--ui-text-tertiary);
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+
+    .op-group-items {
+      display: none;
+      padding: 4px;
+      background: var(--ui-bg);
+    }
+
+    .op-group.expanded .op-group-items {
+      display: block;
+    }
+    
+    .operation-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      margin-bottom: 3px;
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      font-size: 10px;
+    }
+    
+    .operation-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .operation-status {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    
+    .operation-status.pending {
+      background: var(--ui-text-tertiary);
+    }
+    
+    .operation-status.running {
+      background: var(--ui-warning);
+      animation: pulse 1s infinite;
+    }
+    
+    .operation-status.completed {
+      background: var(--ui-success);
+    }
+    
+    .operation-status.error {
+      background: var(--ui-danger);
+    }
+    
+    .operation-name {
+      flex: 1;
+    }
+    
+    .operation-meta {
+      color: var(--ui-text-tertiary);
+      font-size: 9px;
+    }
+
+    .empty-note {
+      padding: 8px 6px;
+      font-size: 10px;
+      color: var(--ui-text-tertiary);
+      text-align: center;
+      border: 1px dashed var(--ui-border);
+      border-radius: 6px;
+      background: var(--ui-bg);
+    }
+    
+    /* 隐藏/显示 */
+    .hidden {
+      display: none !important;
+    }
+    
+    /* 滚动条样式 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: var(--ui-border-strong);
+      border-radius: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      filter: brightness(1.08);
+    }
+
+    .prompt-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      border-radius: 6px;
+      padding: 7px 8px;
+    }
+
+    .prompt-viewer {
+      flex: 1;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-gutter: stable both-edges;
+      white-space: nowrap;
+      color: var(--ui-text);
+      font-size: 11px;
+      line-height: 1.4;
+      padding-bottom: 2px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .icon-btn {
+      width: auto;
+      min-width: 28px;
+      padding: 4px 6px;
+      margin: 0;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .config-snippet-card {
+      margin-top: 8px;
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .config-snippet-card.attention {
+      border-color: var(--ui-warning);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-warning) 35%, transparent);
+      animation: attentionPulse 1.2s ease 1;
+    }
+
+    @keyframes attentionPulse {
+      0% { transform: translateY(0); }
+      25% { transform: translateY(-1px); }
+      50% { transform: translateY(0); }
+      75% { transform: translateY(-1px); }
+      100% { transform: translateY(0); }
+    }
+
+    .fold-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .fold-title {
+      font-size: 11px;
+      color: var(--ui-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .fold-arrow {
+      font-size: 10px;
+      color: var(--ui-text-tertiary);
+      width: 12px;
+      text-align: center;
+      transition: transform 0.15s ease;
+    }
+
+    .config-snippet-card.expanded .fold-arrow {
+      transform: rotate(90deg);
+    }
+
+    .fold-body {
+      display: none;
+      margin-top: 6px;
+    }
+
+    .config-snippet-card.expanded .fold-body {
+      display: block;
+    }
+
+    .config-snippet-title {
+      font-size: 11px;
+      color: var(--ui-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 6px;
+    }
+
+    .config-snippet-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--ui-text);
+      margin: 6px 0 4px;
+    }
+
+    .config-snippet-code {
+      background: var(--ui-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10px;
+      line-height: 1.35;
+      color: var(--ui-text);
+      white-space: pre;
+      overflow: auto;
+      scrollbar-gutter: stable both-edges;
+    }
+
+    .relay-help-hint {
+      font-size: 11px;
+      color: var(--ui-warning);
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+
+    .btn-connect {
+      background: var(--ui-success);
+      color: var(--figma-color-text-onbrand, #ffffff);
+    }
+
+    .btn-connect:hover {
+      filter: brightness(0.95);
+      background: var(--ui-success);
+    }
+
+    .main-tabs {
+      display: flex;
+      gap: 4px;
+      margin: 6px 0;
+      flex-shrink: 0;
+    }
+
+    .main-tab {
+      flex: 1;
+      text-align: center;
+      padding: 5px 0;
+      border: 1px solid var(--ui-border);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--ui-text-secondary);
+      background: var(--ui-bg-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .main-tab.active {
+      color: var(--figma-color-text-onbrand, #ffffff);
+      background: var(--ui-brand);
+      border-color: var(--ui-brand);
+      font-weight: 600;
+    }
+
+    .main-tab-panel {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .main-tab-panel.hidden {
+      display: none !important;
+    }
+
+    .channel-card {
+      margin-top: 8px;
+    }
+
+    .config-empty-state {
+      margin-top: 8px;
+      background: var(--ui-bg-secondary);
+      border: 1px solid var(--ui-border);
+      border-radius: 8px;
+      padding: 10px;
+      color: var(--ui-text-secondary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .config-empty-state-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ui-text);
+      margin-bottom: 6px;
+    }
+
+    body[data-viewport="lg"] .channel-card {
+      margin-top: auto;
+    }
+
+    body[data-viewport="lg"] .config-empty-state {
+      margin-top: auto;
+    }
+
+    body[data-viewport="sm"] .section-title {
+      font-size: 10px;
+    }
+
+    body[data-viewport="sm"] input[type="text"] {
+      font-size: 13px;
+      padding: 6px 8px;
+    }
+
+    body[data-viewport="sm"] button {
+      font-size: 13px;
+      padding: 6px 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div id="status" class="status"></div>
+    <h1>Supercharged AI Agent</h1>
+    <span id="connection-status" style="font-size: 13px; color: var(--ui-text-tertiary);">离线</span>
+  </div>
+
+  <div class="main-tabs">
+    <div id="tab-config" class="main-tab active" onclick="setMainTab('config')">Config</div>
+    <div id="tab-status" class="main-tab" onclick="setMainTab('status')">Status</div>
+    <div id="tab-logs" class="main-tab" onclick="setMainTab('logs')">Logs</div>
+  </div>
+
+  <div id="panel-config" class="main-tab-panel section">
+    <div class="config-scroll">
+      <div id="relay-help-card" class="step-card">
+        <div class="step-head">
+          <span class="step-badge">Step 1</span>
+          <span class="step-title">启动 Relay Server</span>
+        </div>
+        <div id="relay-help-hint" class="relay-help-hint">若连接失败，请先在项目根目录启动 relay server。</div>
+        <div class="config-snippet-label">
+          <span>启动命令（项目根目录）</span>
+          <button class="secondary icon-btn" onclick="copyRelayStartCommand()" title="复制启动命令" aria-label="复制启动命令">⧉</button>
+        </div>
+        <div id="relay-start-viewer" class="config-snippet-code"></div>
+      </div>
+
+      <div id="mcp-config-card" class="step-card">
+        <div class="step-head">
+          <span class="step-badge">Step 2</span>
+          <span class="step-title">AGENT MCPSERVER 配置</span>
+        </div>
+        <div class="config-snippet-card">
+          <div class="fold-header" onclick="toggleMcpConfigCard()">
+            <div class="fold-title">展开/收起配置</div>
+            <div class="fold-arrow">▶</div>
+          </div>
+          <div class="fold-body">
+            <div class="config-snippet-label">
+              <span>mcp.json 片段</span>
+              <button class="secondary icon-btn" onclick="copyMcpJsonConfig()" title="复制 mcp.json 配置" aria-label="复制 mcp.json 配置">⧉</button>
+            </div>
+            <div id="mcp-json-viewer" class="config-snippet-code"></div>
+            <div class="config-snippet-label">
+              <span>Claude CLI 快捷命令</span>
+              <button class="secondary icon-btn" onclick="copyClaudeAddCommand()" title="复制 claude mcp add 命令" aria-label="复制 claude mcp add 命令">⧉</button>
+            </div>
+            <div id="claude-add-viewer" class="config-snippet-code"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-head">
+          <span class="step-badge">Step 3</span>
+          <span class="step-title">Connect to Relay Server</span>
+        </div>
+        <input type="text" id="relay-url" placeholder="ws://127.0.0.1:8888" value="ws://127.0.0.1:8888">
+      </div>
+
+      <div class="step-card">
+        <div class="step-head">
+          <span class="step-badge">Step 4</span>
+          <span class="step-title">Copy Channel Prompt to Agent</span>
+        </div>
+        <div id="step4-waiting" class="relay-help-hint">先完成 Step 3 连接后，此处会显示 connect prompt 与 Channel Code。</div>
+        <div id="connect-prompt-row" class="prompt-row hidden">
+          <div id="prompt-viewer" class="prompt-viewer">connect_to_relay {"relayUrl":"ws://127.0.0.1:8888","channelCode":"--"}</div>
+          <button id="copy-prompt-btn" class="secondary icon-btn" onclick="copyConnectPrompt()" title="复制 Prompt" aria-label="复制 Prompt">⧉</button>
+        </div>
+        <div id="channel-section" class="hidden channel-card" style="padding: 10px; background: var(--ui-bg-secondary); border-radius: 8px; border: 1px solid var(--ui-border);">
+          <div style="font-size: 12px; color: var(--ui-text-tertiary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Channel Code</div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div id="channel-code" style="font-size: 32px; font-weight: 700; color: var(--ui-info); font-family: monospace; letter-spacing: 1px;">--</div>
+            <button onclick="copyChannelCode()" style="width: auto; padding: 6px 11px; font-size: 13px; margin: 0;">复制</button>
+          </div>
+          <div style="font-size: 12px; color: var(--ui-text-tertiary); margin-top: 6px;">在 Cursor/Claude 中输入此 Code 连接</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="config-footer">
+      <button id="connect-btn" class="btn-connect" onclick="connect()">连接 Relay Server</button>
+      <button id="disconnect-btn" class="danger hidden" onclick="disconnect()">断开连接</button>
+    </div>
+  </div>
+
+  <div id="panel-status" class="main-tab-panel section hidden">
+    <div id="progress-container" class="progress-container">
+      <div class="progress-header">
+        <span id="progress-title" class="progress-title">处理中...</span>
+        <span id="progress-percentage" class="progress-percentage">0%</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
+      </div>
+      <div class="progress-details">
+        <span id="progress-stage" class="progress-stage">准备</span>
+        <span id="progress-eta" class="progress-eta">计算中...</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-item">
+        <div class="stat-value" id="tool-count">0</div>
+        <div class="stat-label">可用工具</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="active-ops">0</div>
+        <div class="stat-label">运行中操作</div>
+      </div>
+    </div>
+    <div id="stats-source" class="stats-source">统计来源：runtime（尚未收到工具清单）</div>
+
+    <div id="operations-container" class="section">
+      <div class="section-title">活动操作</div>
+      <div class="operations-toolbar">
+        <span id="operations-summary">0 组</span>
+        <div class="operations-actions">
+          <span class="operations-action" onclick="toggleAllOperationGroups(true)">展开</span>
+          <span class="operations-action" onclick="toggleAllOperationGroups(false)">收起</span>
+        </div>
+      </div>
+      <div id="operations-list" class="operations-list"></div>
+    </div>
+  </div>
+
+  <div id="panel-logs" class="main-tab-panel section hidden">
+    <div class="log-container">
+      <div class="log-header">
+        <span class="log-title">活动日志</span>
+        <div class="log-actions">
+          <span class="log-clear" onclick="toggleAllLogs(true)">展开</span>
+          <span class="log-clear" onclick="toggleAllLogs(false)">收起</span>
+          <span class="log-clear" onclick="clearLog()">清除</span>
+        </div>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const connectionStatusEl = document.getElementById('connection-status');
+    const connectBtn = document.getElementById('connect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const relayHelpCardEl = document.getElementById('relay-help-card');
+    const relayHelpHintEl = document.getElementById('relay-help-hint');
+    const step4WaitingEl = document.getElementById('step4-waiting');
+    const connectPromptRowEl = document.getElementById('connect-prompt-row');
+    const promptViewerEl = document.getElementById('prompt-viewer');
+    const relayStartViewerEl = document.getElementById('relay-start-viewer');
+    const mcpJsonViewerEl = document.getElementById('mcp-json-viewer');
+    const claudeAddViewerEl = document.getElementById('claude-add-viewer');
+    const mcpConfigCardEl = document.getElementById('mcp-config-card');
+    const channelSection = document.getElementById('channel-section');
+    const channelCodeEl = document.getElementById('channel-code');
+    const tabConfigEl = document.getElementById('tab-config');
+    const tabStatusEl = document.getElementById('tab-status');
+    const tabLogsEl = document.getElementById('tab-logs');
+    const panelConfigEl = document.getElementById('panel-config');
+    const panelStatusEl = document.getElementById('panel-status');
+    const panelLogsEl = document.getElementById('panel-logs');
+    const logEl = document.getElementById('log');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBarFill = document.getElementById('progress-bar-fill');
+    const progressPercentage = document.getElementById('progress-percentage');
+    const progressTitle = document.getElementById('progress-title');
+    const progressStage = document.getElementById('progress-stage');
+    const progressEta = document.getElementById('progress-eta');
+    const operationsList = document.getElementById('operations-list');
+    const operationsSummaryEl = document.getElementById('operations-summary');
+    const activeOpsEl = document.getElementById('active-ops');
+    const toolCountEl = document.getElementById('tool-count');
+    const statsSourceEl = document.getElementById('stats-source');
+
+    const operations = new Map();
+    const collapsedOperationGroups = new Set();
+    const seenTools = new Set();
+    let availableToolCount = 0;
+    let ws = null;
+    let currentChannelCode = null;
+    let currentProgressValue = 0;
+    let lastProgressAt = 0;
+    let progressAutoHideTimer = null;
+    let progressStallTimer = null;
+    const MAX_LOG_ENTRIES = 300;
+    let currentMainTab = 'config';
+    let manualDisconnecting = false;
+
+    function formatTime(date) {
+      return date.toTimeString().slice(0, 8);
+    }
+
+    function normalizeToolName(raw) {
+      if (!raw) return 'unknown_tool';
+      const name = String(raw).trim();
+      const cleaned = name.replace(/^create_/, '');
+      return cleaned.toLowerCase();
+    }
+
+    function extractToolNameFromMessage(message) {
+      if (!message) return 'system';
+      const text = String(message);
+      const bracket = text.match(/\[([a-zA-Z0-9_:-]+)\]/);
+      if (bracket) return normalizeToolName(bracket[1]);
+      const exec = text.match(/Error executing ([a-zA-Z0-9_:-]+)/);
+      if (exec) return normalizeToolName(exec[1]);
+      const token = text.match(/([a-zA-Z][a-zA-Z0-9_:-]+)/);
+      return token ? normalizeToolName(token[1]) : 'system';
+    }
+
+    function truncateText(text, max = 140) {
+      const s = String(text ?? '');
+      return s.length > max ? `${s.slice(0, max)}...` : s;
+    }
+
+    function summarizeValue(value, maxLen = 120) {
+      if (value === null) return 'null';
+      if (value === undefined) return 'undefined';
+      if (typeof value === 'string') return truncateText(value, maxLen);
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+      if (Array.isArray(value)) return `array(${value.length})`;
+      if (typeof value === 'object') {
+        const keys = Object.keys(value);
+        if (keys.length === 0) return '{}';
+        const brief = keys.slice(0, 6).map((k) => `${k}:${summarizeValue(value[k], 24)}`).join(', ');
+        const suffix = keys.length > 6 ? ', ...' : '';
+        return `{${brief}${suffix}}`;
+      }
+      return truncateText(String(value), maxLen);
+    }
+
+    function summarizeToolCallMessage(msg) {
+      const toolName = normalizeToolName(msg?.type || 'unknown_tool');
+      const payload = msg?.payload || {};
+      const summary = summarizeValue(payload, 120);
+      const detail = (() => {
+        try {
+          return JSON.stringify(payload, null, 2);
+        } catch (_) {
+          return String(payload);
+        }
+      })();
+      return { summary: `${toolName} | payload=${summary}`, detail };
+    }
+
+    function summarizeResponseMessage(opName, payload) {
+      const hasError = Boolean(payload?.error);
+      if (hasError) {
+        return {
+          summary: `${opName} | failed | error=${truncateText(payload.error, 160)}`,
+          detail: String(payload?.error || ''),
+        };
+      }
+      const resultSummary = summarizeValue(payload?.result, 140);
+      const detail = (() => {
+        try {
+          return JSON.stringify(payload?.result, null, 2);
+        } catch (_) {
+          return String(payload?.result ?? '');
+        }
+      })();
+      return { summary: `${opName} | success | result=${resultSummary}`, detail };
+    }
+
+    function createLogEntry(summary, type, detail = '') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const normalizedSummary = String(summary ?? '');
+      const normalizedDetail = String(detail ?? '').trim();
+      const hasDetail = normalizedDetail && normalizedDetail !== normalizedSummary;
+      if (hasDetail) entry.classList.add('expandable');
+      entry.innerHTML = `
+        <div class="log-row">
+          <span class="log-time">${formatTime(new Date())}</span>
+          <span class="log-message">${normalizedSummary}</span>
+          <span class="log-expand">▶</span>
+        </div>
+        <div class="log-detail">${hasDetail ? normalizedDetail : ''}</div>
+      `;
+      if (hasDetail) {
+        entry.querySelector('.log-row').addEventListener('click', () => {
+          entry.classList.toggle('expanded');
+        });
+      }
+      return entry;
+    }
+
+    function log(message, type = 'info', detail = '') {
+      const entry = createLogEntry(message, type, detail);
+      logEl.appendChild(entry);
+      while (logEl.children.length > MAX_LOG_ENTRIES) {
+        logEl.removeChild(logEl.firstElementChild);
+      }
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function toggleAllLogs(expand) {
+      const rows = logEl.querySelectorAll('.log-entry.expandable');
+      rows.forEach((el) => {
+        if (expand) el.classList.add('expanded');
+        else el.classList.remove('expanded');
+      });
+    }
+
+    function clearLog() {
+      logEl.innerHTML = '';
+      log('日志已清除', 'info');
+    }
+
+    function refreshToolStats() {
+      const hasCatalog = availableToolCount > 0;
+      const effectiveCount = hasCatalog ? availableToolCount : seenTools.size;
+      toolCountEl.textContent = String(effectiveCount);
+      if (statsSourceEl) {
+        statsSourceEl.textContent = hasCatalog
+          ? '统计来源：catalog（服务端 get_tools）'
+          : '统计来源：runtime（尚未收到工具清单）';
+      }
+    }
+
+    function setMainTab(tab) {
+      const normalized = tab === 'status' || tab === 'logs' ? tab : 'config';
+      currentMainTab = normalized;
+      if (tabConfigEl) tabConfigEl.classList.toggle('active', normalized === 'config');
+      if (tabStatusEl) tabStatusEl.classList.toggle('active', normalized === 'status');
+      if (tabLogsEl) tabLogsEl.classList.toggle('active', normalized === 'logs');
+      if (panelConfigEl) panelConfigEl.classList.toggle('hidden', normalized !== 'config');
+      if (panelStatusEl) panelStatusEl.classList.toggle('hidden', normalized !== 'status');
+      if (panelLogsEl) panelLogsEl.classList.toggle('hidden', normalized !== 'logs');
+    }
+
+    function applyViewportLayout() {
+      const h = window.innerHeight || 0;
+      let mode = 'md';
+      if (h <= 380) mode = 'sm';
+      else if (h >= 520) mode = 'lg';
+      document.body.setAttribute('data-viewport', mode);
+    }
+
+    function clampProgress(v) {
+      return Math.max(0, Math.min(100, Math.round(v)));
+    }
+
+    function normalizeProgress(data) {
+      const operationName = data.operationName || data.name || '处理中...';
+      const current = Number.isFinite(data.current) ? data.current : undefined;
+      const total = Number.isFinite(data.total) ? data.total : undefined;
+      let percentage = Number.isFinite(data.percentage) ? data.percentage : undefined;
+
+      if (!Number.isFinite(percentage) && Number.isFinite(current) && Number.isFinite(total) && total > 0) {
+        percentage = (current / total) * 100;
+      }
+      if (!Number.isFinite(percentage)) {
+        percentage = currentProgressValue > 0 ? currentProgressValue : 2;
+      }
+      if (percentage === 0) {
+        percentage = currentProgressValue > 0 ? currentProgressValue : 3;
+      }
+
+      percentage = clampProgress(percentage);
+      if (percentage < currentProgressValue) {
+        percentage = currentProgressValue;
+      }
+
+      return {
+        operationName,
+        percentage,
+        message: data.message || '',
+        stage: data.stage || '',
+        eta: Number.isFinite(data.eta) ? data.eta : null,
+      };
+    }
+
+    function scheduleProgressStallWatch() {
+      if (progressStallTimer) clearTimeout(progressStallTimer);
+      progressStallTimer = setTimeout(() => {
+        if (!progressContainer.classList.contains('active')) return;
+        const idleMs = Date.now() - lastProgressAt;
+        if (idleMs >= 15000) {
+          log('进度长时间未更新，自动结束当前进度显示', 'warning');
+          completeProgress({ name: progressTitle.textContent || '当前操作', duration: 0 }, true);
+        }
+      }, 16000);
+    }
+
+    function startPseudoProgress(operationName) {
+      const name = normalizeToolName(operationName || 'operation');
+      progressContainer.classList.add('active');
+      progressTitle.textContent = name;
+      progressStage.textContent = '执行中';
+      progressEta.textContent = '';
+      currentProgressValue = Math.max(currentProgressValue, 6);
+      progressBarFill.style.width = `${currentProgressValue}%`;
+      progressPercentage.textContent = `${currentProgressValue}%`;
+      statusEl.classList.add('processing');
+      lastProgressAt = Date.now();
+      scheduleProgressStallWatch();
+    }
+
+    function updateProgress(data) {
+      const normalized = normalizeProgress(data || {});
+      const { operationName, percentage, message, stage, eta } = normalized;
+
+      if (progressAutoHideTimer) {
+        clearTimeout(progressAutoHideTimer);
+        progressAutoHideTimer = null;
+      }
+
+      lastProgressAt = Date.now();
+      currentProgressValue = percentage;
+      progressContainer.classList.add('active');
+      progressBarFill.style.width = `${percentage}%`;
+      progressPercentage.textContent = `${percentage}%`;
+      progressTitle.textContent = operationName || '处理中...';
+      progressStage.textContent = stage || '';
+      progressEta.textContent = eta ? `预计剩余 ${eta} 秒` : '计算中...';
+      statusEl.classList.add('processing');
+      scheduleProgressStallWatch();
+
+      if (message || percentage === 0 || percentage === 100 || percentage % 10 === 0) {
+        const detail = [stage, message].filter(Boolean).join(' | ');
+        log(`progress | ${normalizeToolName(operationName)} | ${percentage}%${detail ? ` | ${truncateText(detail, 120)}` : ''}`, 'info');
+      }
+    }
+
+    function completeProgress(data, silent = false) {
+      const { name, duration } = data;
+
+      if (progressStallTimer) {
+        clearTimeout(progressStallTimer);
+        progressStallTimer = null;
+      }
+
+      currentProgressValue = 100;
+      progressBarFill.style.width = '100%';
+      progressPercentage.textContent = '100%';
+      progressStage.textContent = '完成';
+      progressEta.textContent = '';
+
+      progressAutoHideTimer = setTimeout(() => {
+        progressContainer.classList.remove('active');
+        statusEl.classList.remove('processing');
+        currentProgressValue = 0;
+        progressBarFill.style.width = '0%';
+        progressPercentage.textContent = '0%';
+        if (!silent) {
+          log(normalizeToolName(name || 'operation'), 'success');
+        }
+      }, 700);
+    }
+
+    function addOperation(opId, name, meta = '') {
+      operations.set(opId, { id: opId, name, status: 'pending', meta, createdAt: Date.now() });
+      seenTools.add(name);
+      refreshToolStats();
+      if (operations.size === 1) {
+        startPseudoProgress(name);
+      }
+      updateOperationsList();
+    }
+
+    function updateOperation(opId, status, meta) {
+      const op = operations.get(opId);
+      if (op) {
+        op.status = status;
+        if (meta !== undefined) op.meta = meta;
+        op.updatedAt = Date.now();
+        updateOperationsList();
+      }
+    }
+
+    function removeOperation(opId) {
+      operations.delete(opId);
+      updateOperationsList();
+    }
+
+    function getGroupedOperations() {
+      const groups = new Map();
+      for (const op of operations.values()) {
+        const key = op.name || 'unknown';
+        if (!groups.has(key)) {
+          groups.set(key, {
+            name: key,
+            items: [],
+            counts: { pending: 0, running: 0, completed: 0, error: 0 },
+            latestAt: 0,
+          });
+        }
+        const g = groups.get(key);
+        g.items.push(op);
+        if (g.counts[op.status] === undefined) g.counts[op.status] = 0;
+        g.counts[op.status] += 1;
+        g.latestAt = Math.max(g.latestAt, Number(op.updatedAt || op.createdAt || 0));
+      }
+      return Array.from(groups.values()).sort((a, b) => b.latestAt - a.latestAt);
+    }
+
+    function toggleOperationGroup(name) {
+      if (collapsedOperationGroups.has(name)) collapsedOperationGroups.delete(name);
+      else collapsedOperationGroups.add(name);
+      updateOperationsList();
+    }
+
+    function toggleAllOperationGroups(expand) {
+      const groups = getGroupedOperations();
+      if (expand) {
+        collapsedOperationGroups.clear();
+      } else {
+        groups.forEach((g) => collapsedOperationGroups.add(g.name));
+      }
+      updateOperationsList();
+    }
+
+    function updateOperationsList() {
+      activeOpsEl.textContent = operations.size;
+      const groups = getGroupedOperations();
+      if (operationsSummaryEl) {
+        operationsSummaryEl.textContent = `${groups.length} 组 / ${operations.size} 条`;
+      }
+
+      operationsList.innerHTML = '';
+      if (groups.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-note';
+        empty.textContent = '暂无活动操作';
+        operationsList.appendChild(empty);
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      for (const group of groups) {
+        const isCollapsed = collapsedOperationGroups.has(group.name);
+        const groupEl = document.createElement('div');
+        groupEl.className = `op-group ${isCollapsed ? '' : 'expanded'}`;
+
+        const head = document.createElement('div');
+        head.className = 'op-group-head';
+        const statsText = `R:${group.counts.running || 0} P:${group.counts.pending || 0} E:${group.counts.error || 0}`;
+        head.innerHTML = `
+          <span class="op-group-arrow">▶</span>
+          <span class="op-group-name">${group.name}</span>
+          <span class="op-group-stats">${group.items.length} | ${statsText}</span>
+        `;
+        head.addEventListener('click', () => toggleOperationGroup(group.name));
+
+        const items = document.createElement('div');
+        items.className = 'op-group-items';
+        group.items
+          .sort((a, b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0))
+          .forEach((op) => {
+            const item = document.createElement('div');
+            item.className = 'operation-item';
+            item.innerHTML = `
+              <div class="operation-status ${op.status}"></div>
+              <span class="operation-name">${op.id ? op.id.slice(0, 8) : 'op'}</span>
+              <span class="operation-meta">${op.meta || ''}</span>
+            `;
+            items.appendChild(item);
+          });
+
+        groupEl.appendChild(head);
+        groupEl.appendChild(items);
+        fragment.appendChild(groupEl);
+      }
+      operationsList.appendChild(fragment);
+    }
+
+    function settleOperationFromResponse(payload) {
+      if (!payload || !payload.id) return;
+      const op = operations.get(payload.id);
+      if (!op) return;
+      const hasError = Boolean(payload.error);
+      const responseSummary = summarizeResponseMessage(op.name, payload);
+      log(responseSummary.summary, hasError ? 'error' : 'success', responseSummary.detail);
+      removeOperation(payload.id);
+      if (operations.size === 0) {
+        completeProgress({ name: op.name, duration: 0 }, true);
+      } else {
+        const nextOp = operations.values().next().value;
+        if (nextOp?.name) startPseudoProgress(nextOp.name);
+      }
+    }
+
+    function connect() {
+      const relayUrl = document.getElementById('relay-url').value.trim();
+      if (!relayUrl) {
+        log('请输入 Relay Server 地址', 'error');
+        return;
+      }
+      if (relayHelpCardEl) relayHelpCardEl.classList.remove('attention');
+      if (relayHelpHintEl) relayHelpHintEl.textContent = '若连接失败，请先在项目根目录启动 relay server。';
+      
+      connectBtn.disabled = true;
+      connectBtn.textContent = '连接中...';
+      log(`正在连接 Relay Server: ${relayUrl}`, 'info');
+      
+      try {
+        // 连接到 relay server（不传 channel，让 server 自动生成）
+        ws = new WebSocket(`${relayUrl}?type=figma`);
+        
+        ws.onopen = () => {
+          log('已连接到 Relay Server，等待 Channel...', 'success');
+          // 更新 UI 状态为等待 channel
+          statusEl.classList.add('processing');
+          connectionStatusEl.textContent = '等待 Channel...';
+          connectionStatusEl.style.color = 'var(--ui-warning)';
+        };
+        
+        ws.onmessage = async (event) => {
+          let rawData = event.data;
+          if (rawData instanceof Blob) {
+            rawData = await rawData.text();
+          }
+
+          let msg;
+          try {
+            msg = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+          } catch (err) {
+            return;
+          }
+
+          // 处理系统消息
+          if (msg.type === 'system') {
+            if (msg.event === 'connected') {
+              currentChannelCode = msg.channel;
+              channelCodeEl.textContent = currentChannelCode;
+              renderConnectPrompt();
+              channelSection.classList.remove('hidden');
+              showConnected();
+              log(`Channel Code: ${currentChannelCode}`, 'success');
+
+              // 通知主线程
+              parent.postMessage({
+                pluginMessage: {
+                  type: 'relay-connected',
+                  channel: currentChannelCode
+                }
+              }, '*');
+            }
+            return;
+          }
+
+          // Progress messages are for UI display and should not be forwarded as tool calls.
+          if (msg.type === 'progress_update') {
+            updateProgress(msg.payload);
+            return;
+          }
+          if (msg.type === 'progress_complete') {
+            completeProgress(msg.payload);
+            return;
+          }
+
+          if (msg.id && msg.type && msg.type !== 'response') {
+            const toolName = normalizeToolName(msg.type);
+            const callSummary = summarizeToolCallMessage(msg);
+            if (!operations.has(msg.id)) {
+              addOperation(msg.id, toolName, truncateText(callSummary.summary, 80));
+            }
+            updateOperation(msg.id, 'running');
+            log(`start | ${callSummary.summary}`, 'info', callSummary.detail);
+          }
+
+      if (msg.type === 'get_tools' && Array.isArray(msg.payload?.tools)) {
+            availableToolCount = msg.payload.tools.length;
+            refreshToolStats();
+          }
+
+          // 转发消息到主线程
+          parent.postMessage({
+            pluginMessage: {
+              type: 'relay-message',
+              payload: msg
+            }
+          }, '*');
+        };
+        
+        ws.onclose = () => {
+          log('与 Relay Server 断开连接', 'warning');
+          ws = null;
+          currentChannelCode = null;
+          if (!manualDisconnecting) {
+            revealRelayHelp('连接已断开。请确认 Relay Server 仍在运行。');
+          }
+          manualDisconnecting = false;
+          showDisconnected();
+          parent.postMessage({ pluginMessage: { type: 'relay-disconnected' } }, '*');
+        };
+        
+        ws.onerror = (error) => {
+          log('连接失败，请检查 Relay Server 地址', 'error');
+          revealRelayHelp('连接失败。请确认你已在项目根目录运行 relay server。');
+          showDisconnected();
+        };
+      } catch (err) {
+        log(`连接错误: ${err.message}`, 'error');
+        revealRelayHelp('连接异常。请先启动 Relay Server，再检查地址与端口。');
+        showDisconnected();
+      }
+    }
+
+    function copyChannelCode() {
+      if (!currentChannelCode) {
+        log('尚未获取 Channel Code，无法复制', 'error');
+        return;
+      }
+      copyTextWithFallback(currentChannelCode, 'Channel Code');
+    }
+
+    function buildConnectPrompt() {
+      const relayUrl = document.getElementById('relay-url').value.trim() || 'ws://127.0.0.1:8888';
+      const payload = {
+        relayUrl,
+        channelCode: currentChannelCode || '--',
+      };
+      return `connect_to_relay ${JSON.stringify(payload)}`;
+    }
+
+    function renderConnectPrompt() {
+      if (!promptViewerEl) return;
+      promptViewerEl.textContent = buildConnectPrompt();
+    }
+
+    function copyConnectPrompt() {
+      if (!currentChannelCode) {
+        log('尚未获取 Channel Code，无法复制 Prompt', 'error');
+        return;
+      }
+      const prompt = buildConnectPrompt();
+      renderConnectPrompt();
+      copyTextWithFallback(prompt, 'connect_to_relay Prompt');
+    }
+
+    function buildMcpJsonConfig() {
+      const config = {
+        mcpServers: {
+          'supercharged-figma': {
+            command: 'npx',
+            args: ['-y', 'supercharged-figma-mcp'],
+          },
+        },
+      };
+      return JSON.stringify(config, null, 2);
+    }
+
+    function buildRelayStartCommand() {
+      return 'node relay-server.js';
+    }
+
+    function buildClaudeAddCommand() {
+      return 'claude mcp add supercharged-figma -- npx -y supercharged-figma-mcp';
+    }
+
+    function renderMcpSetupHints() {
+      if (relayStartViewerEl) relayStartViewerEl.textContent = buildRelayStartCommand();
+      if (mcpJsonViewerEl) mcpJsonViewerEl.textContent = buildMcpJsonConfig();
+      if (claudeAddViewerEl) claudeAddViewerEl.textContent = buildClaudeAddCommand();
+    }
+
+    function copyRelayStartCommand() {
+      copyTextWithFallback(buildRelayStartCommand(), 'relay 启动命令');
+    }
+
+    function copyMcpJsonConfig() {
+      copyTextWithFallback(buildMcpJsonConfig(), 'mcp.json 配置');
+    }
+
+    function copyClaudeAddCommand() {
+      copyTextWithFallback(buildClaudeAddCommand(), 'claude mcp add 命令');
+    }
+
+    function fallbackCopyText(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.style.top = '0';
+      ta.setAttribute('readonly', 'readonly');
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    function copyTextWithFallback(text, label = '内容') {
+      const normalized = String(text ?? '');
+      if (!normalized) {
+        log(`${label} 为空，无法复制`, 'error');
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(normalized).then(() => {
+          log(`${label} 已复制`, 'success');
+        }).catch(() => {
+          const ok = fallbackCopyText(normalized);
+          if (ok) log(`${label} 已复制（fallback）`, 'success');
+          else log(`自动复制失败，请手动复制${label}`, 'warning');
+        });
+        return;
+      }
+      const ok = fallbackCopyText(normalized);
+      if (ok) log(`${label} 已复制（fallback）`, 'success');
+      else log(`自动复制失败，请手动复制${label}`, 'warning');
+    }
+
+    function disconnect() {
+      if (ws) {
+        manualDisconnecting = true;
+        ws.close();
+        ws = null;
+      }
+      currentChannelCode = null;
+      parent.postMessage({ 
+        pluginMessage: { type: 'relay-disconnected' } 
+      }, '*');
+    }
+
+    function toggleMcpConfigCard() {
+      if (!mcpConfigCardEl) return;
+      const foldCard = mcpConfigCardEl.querySelector('.config-snippet-card');
+      if (!foldCard) return;
+      foldCard.classList.toggle('expanded');
+    }
+
+    function revealRelayHelp(message = '连接失败，可能是 Relay Server 未启动。请先启动后重试。') {
+      if (relayHelpHintEl) relayHelpHintEl.textContent = message;
+      if (!relayHelpCardEl) return;
+      relayHelpCardEl.classList.remove('hidden');
+      relayHelpCardEl.classList.add('attention');
+      relayHelpCardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setTimeout(() => relayHelpCardEl.classList.remove('attention'), 1800);
+    }
+
+    function showConnected() {
+      statusEl.classList.add('connected');
+      statusEl.classList.remove('processing');
+      connectionStatusEl.textContent = '已连接';
+      connectionStatusEl.style.color = 'var(--ui-success)';
+
+      connectBtn.classList.add('hidden');
+      disconnectBtn.classList.remove('hidden');
+      if (relayHelpCardEl) relayHelpCardEl.classList.add('hidden');
+      if (connectPromptRowEl) connectPromptRowEl.classList.remove('hidden');
+      if (step4WaitingEl) step4WaitingEl.classList.add('hidden');
+      renderConnectPrompt();
+      setMainTab(currentMainTab || 'status');
+
+      log('已连接到 MCP Server', 'success');
+    }
+
+    function showDisconnected() {
+      statusEl.classList.remove('connected', 'processing');
+      connectionStatusEl.textContent = '离线';
+      connectionStatusEl.style.color = 'var(--ui-text-tertiary)';
+
+      connectBtn.classList.remove('hidden');
+      disconnectBtn.classList.add('hidden');
+      if (relayHelpCardEl) relayHelpCardEl.classList.remove('hidden');
+      if (connectPromptRowEl) connectPromptRowEl.classList.add('hidden');
+      if (step4WaitingEl) step4WaitingEl.classList.remove('hidden');
+      channelSection.classList.add('hidden');
+      connectBtn.disabled = false;
+      connectBtn.textContent = '连接 Relay Server';
+      setMainTab('config');
+      
+      operations.clear();
+      collapsedOperationGroups.clear();
+      seenTools.clear();
+      availableToolCount = 0;
+      refreshToolStats();
+      if (operationsSummaryEl) operationsSummaryEl.textContent = '0 组';
+      updateOperationsList();
+      if (progressAutoHideTimer) {
+        clearTimeout(progressAutoHideTimer);
+        progressAutoHideTimer = null;
+      }
+      if (progressStallTimer) {
+        clearTimeout(progressStallTimer);
+        progressStallTimer = null;
+      }
+      currentProgressValue = 0;
+      progressContainer.classList.remove('active');
+      progressBarFill.style.width = '0%';
+      progressPercentage.textContent = '0%';
+      
+      log('已断开连接', 'warning');
+    }
+
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+      
+      switch (msg.type) {
+        case 'connected':
+          showConnected();
+          break;
+        case 'disconnected':
+          showDisconnected();
+          break;
+        case 'error':
+          connectBtn.disabled = false;
+          connectBtn.textContent = '连接 MCP Server';
+          log(`错误: ${msg.payload}`, 'error');
+          break;
+        case 'response':
+          settleOperationFromResponse(msg.payload);
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(msg.payload));
+          } else {
+            log('无法回传响应：Relay 未连接', 'error');
+          }
+          break;
+        case 'progress':
+          updateProgress(msg.payload);
+          break;
+        case 'progress_complete':
+          completeProgress(msg.payload);
+          break;
+        case 'operation_start':
+          addOperation(msg.payload.operationId, msg.payload.name);
+          break;
+        case 'operation_update':
+          updateOperation(msg.payload.operationId, msg.payload.status, msg.payload.meta);
+          break;
+        case 'operation_end':
+          removeOperation(msg.payload.operationId);
+          break;
+        case 'log':
+          log(msg.payload?.message || extractToolNameFromMessage(msg.payload?.message), msg.payload?.level || 'info');
+          break;
+      }
+    };
+
+    // 检查初始状态
+    parent.postMessage({ pluginMessage: { type: 'get-status' } }, '*');
+    document.getElementById('relay-url').addEventListener('input', renderConnectPrompt);
+    window.addEventListener('resize', applyViewportLayout);
+    applyViewportLayout();
+    renderMcpSetupHints();
+    renderConnectPrompt();
+    setMainTab('config');
+    log('等待连接...', 'info');
+  </script>
+</body>
+</html>

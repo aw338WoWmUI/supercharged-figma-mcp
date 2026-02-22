@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "None",
+    "lib": ["ES2017", "DOM"],
+    "strict": false,
+    "noImplicitAny": false,
+    "noCheck": true,
+    "esModuleInterop": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": ".",
+    "rootDir": ".",
+    "typeRoots": [
+      "../node_modules/@types",
+      "../node_modules/@figma"
+    ]
+  },
+  "include": ["code.ts"],
+  "exclude": ["node_modules"]
+}

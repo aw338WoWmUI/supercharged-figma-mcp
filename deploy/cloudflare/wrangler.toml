@@ -1,0 +1,13 @@
+name = "supercharged-figma-relay"
+main = "worker-relay.ts"
+compatibility_date = "2025-01-01"
+
+[durable_objects]
+bindings = [
+  { name = "RELAY_ROOM", class_name = "RelayRoomDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RelayRoomDO"]
+
