@@ -1,0 +1,28 @@
+# Prefer package.json "files" allowlist; this file is a secondary guard.
+
+# Source and tests
+src/
+figma-plugin/
+deploy/
+dist/tests/
+dist/**/*.map
+dist/**/*.d.ts
+dist/**/*.d.ts.map
+
+# Local/dev artifacts
+node_modules/
+coverage/
+.nyc_output/
+*.log
+.DS_Store
+
+# VCS and editor files
+.git/
+.github/
+.idea/
+.vscode/
+
+# Local config and environment
+.env
+.env.local
+cursor-config.json

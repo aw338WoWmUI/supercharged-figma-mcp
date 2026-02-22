@@ -2,8 +2,23 @@
   "name": "supercharged-figma-mcp",
   "version": "1.0.0",
   "description": "Supercharged Figma MCP Server with full automation support",
-  "main": "dist/index.js",
+  "main": "dist/server.js",
   "type": "module",
+  "files": [
+    "dist/server.js",
+    "dist/enhanced-batch-operations.js",
+    "dist/progress-manager.js",
+    "dist/rest-bridge.js",
+    "dist/types.js",
+    "dist/runtime/embedded-relay.js",
+    "dist/runtime/instance-manager.js",
+    "README.md",
+    "SECURITY.md",
+    "USER_GUIDE.md",
+    "DEVELOPER_GUIDE.md",
+    "relay-server.js",
+    "setup-mcp.sh"
+  ],
   "bin": {
     "supercharged-figma-mcp": "./dist/server.js"
   },
