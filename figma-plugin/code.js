@@ -4,17 +4,14 @@ let isConnected = false;
 let activeBridgeSessionId = null;
 let pendingDisconnectTimer = null;
 const TOOL_EXECUTION_TIMEOUT_MS = 120000;
-/**
- * Build tool catalog from this file's switch cases.
- * This avoids hardcoding tool schemas in both MCP worker and plugin.
- */
 let pluginToolCatalog = null;
 function getPluginToolCatalog() {
-    if (pluginToolCatalog) return pluginToolCatalog;
+    if (pluginToolCatalog)
+        return pluginToolCatalog;
     const source = handleMessage.toString();
-    const matchPattern = /case\s+['"]([^'"]+)['"]\s*:/g;
+    const matchPattern = /case\s+['\"]([^'\"]+)['\"]\s*:/g;
     const names = new Set();
-    let match = null;
+    let match;
     while ((match = matchPattern.exec(source)) !== null) {
         const toolName = match[1];
         if (!toolName)
@@ -22,7 +19,7 @@ function getPluginToolCatalog() {
         names.add(toolName);
     }
     const excluded = new Set(['get_tools', 'progress_update', 'progress_complete', 'log']);
-    pluginToolCatalog = Array.from(names)
+    pluginToolCatalog = [...names]
         .filter((name) => !excluded.has(name))
         .sort()
         .map((name) => ({
@@ -192,7 +189,7 @@ async function handleMessage(message) {
                 result = await setNodePosition(payload.nodeId, payload.x, payload.y);
                 break;
             case 'arrange_nodes':
-                result = await arrangeNodes(payload.nodeIds, payload.layout, payload.columns, payload.spacingX, payload.spacingY, payload.startX, payload.startY, payload.withinContainerId, payload.placementPolicy, payload.avoidOverlaps, payload.verifyVisual, payload.snapshotMode, payload.snapshotScale, payload.focus);
+                result = await arrangeNodes(payload.nodeIds, payload.layout, payload.columns, payload.spacingX, payload.spacingY, payload.groupBy, payload.startX, payload.startY, payload.withinContainerId, payload.placementPolicy, payload.avoidOverlaps, payload.verifyVisual, payload.snapshotMode, payload.snapshotScale, payload.focus);
                 break;
             case 'containerize_nodes':
                 result = await containerizeNodes(payload.nodeIds, payload.containerId);
@@ -2317,15 +2314,15 @@ async function setNodePosition(nodeId, x, y) {
     scene.y = y;
     return { id: scene.id, x: scene.x, y: scene.y };
 }
-async function arrangeNodes(nodeIds, layout = 'row', columns, spacingX = 120, spacingY = 120, startX, startY, withinContainerId, placementPolicy = 'min_move', avoidOverlaps = true, verifyVisual = false, snapshotMode = 'selection', snapshotScale = 1, focus = true) {
+async function arrangeNodes(nodeIds, layout = 'row', columns, spacingX = 120, spacingY = 120, groupBy = 'none', startX, startY, withinContainerId, placementPolicy = 'min_move', avoidOverlaps = true, verifyVisual = false, snapshotMode = 'selection', snapshotScale = 1, focus = true) {
     var _a, _b;
     const ids = Array.isArray(nodeIds) && nodeIds.length > 0
-        ? nodeIds
+        ? Array.from(new Set(nodeIds))
         : figma.currentPage.selection.map((n) => n.id);
     if (ids.length === 0) {
         throw new Error('No nodeIds provided and current selection is empty');
     }
-    const nodes = [];
+    let nodes = [];
     const missingDetails = [];
     for (const id of ids) {
         const node = await figma.getNodeByIdAsync(id);
@@ -2358,6 +2355,21 @@ async function arrangeNodes(nodeIds, layout = 'row', columns, spacingX = 120, sp
     if (nodes.length === 0) {
         throw new Error('No positionable nodes found');
     }
+    const selectedNodeIds = new Set(nodes.map((n) => n.id));
+    nodes = nodes.filter((node) => {
+        let parent = node.parent;
+        while (parent) {
+            if (selectedNodeIds.has(parent.id)) {
+                return false;
+            }
+            parent = parent.parent;
+        }
+        return true;
+    });
+    nodes = collapseFullSelectionGroups(nodes);
+    if (nodes.length === 0) {
+        throw new Error('No top-level nodes found (selection contains only descendants of other selected nodes)');
+    }
     const targetPage = getNodePage(nodes[0]);
     if (targetPage && figma.currentPage.id !== targetPage.id) {
         await figma.setCurrentPageAsync(targetPage);
@@ -2378,27 +2390,15 @@ async function arrangeNodes(nodeIds, layout = 'row', columns, spacingX = 120, sp
     if (samePageNodes.length === 0) {
         throw new Error('No nodes are on the current page after page switch');
     }
-    const sorted = [...samePageNodes].sort((a, b) => {
-        if (layout === 'column')
+    const needsGrouping = groupBy && groupBy !== 'none';
+    const layoutForSort = layout;
+    let sorted = [...samePageNodes].sort((a, b) => {
+        if (layoutForSort === 'column')
             return (a.y - b.y) || (a.x - b.x);
         return (a.x - b.x) || (a.y - b.y);
     });
-    const maxWidth = Math.max(...sorted.map((n) => n.width));
-    const maxHeight = Math.max(...sorted.map((n) => n.height));
-    const minX = Math.min(...sorted.map((n) => n.x));
-    const minY = Math.min(...sorted.map((n) => n.y));
-    const beforeUnion = getUnionBounds(sorted.map(sceneNodeToRect));
     const container = withinContainerId ? await resolveContainer(withinContainerId) : null;
     const containerPad = 24;
-    const baseX = Number.isFinite(startX)
-        ? startX
-        : (container ? container.x + containerPad : minX);
-    const baseY = Number.isFinite(startY)
-        ? startY
-        : (container ? container.y + containerPad : minY);
-    const gridCols = layout === 'grid'
-        ? Math.max(1, Number.isFinite(columns) ? Math.floor(columns) : Math.ceil(Math.sqrt(sorted.length)))
-        : 1;
     // Optional: ensure nodes are actual children of target container.
     let containerizedCount = 0;
     if (container) {
@@ -2406,10 +2406,39 @@ async function arrangeNodes(nodeIds, layout = 'row', columns, spacingX = 120, sp
         containerizedCount = c.containerizedCount;
         for (let i = 0; i < sorted.length; i++) {
             const n = await figma.getNodeByIdAsync(sorted[i].id);
-            if (n && 'x' in n && 'y' in n)
+            if (n && 'x' in n && 'y' in n && 'width' in n && 'height' in n) {
                 sorted[i] = n;
+            }
         }
     }
+    const arrangementMeta = await Promise.all(sorted.map(async (node) => {
+        const absoluteRect = sceneNodeToRect(node);
+        const parent = node.parent;
+        const localWidth = Number.isFinite(node.width) ? node.width : absoluteRect.width;
+        const localHeight = Number.isFinite(node.height) ? node.height : absoluteRect.height;
+        const localRect = {
+            x: node.x,
+            y: node.y,
+            width: localWidth,
+            height: localHeight,
+        };
+        const area = Math.max(0, localRect.width) * Math.max(0, localRect.height);
+        const groupByMode = groupBy || 'none';
+        const groupInfo = await resolveArrangeGroup(node, groupByMode);
+        return Object.assign({ node, rect: absoluteRect, localRect,
+            area, parentId: parent ? parent.id : 'page' }, groupInfo);
+    }));
+    const beforeUnion = getUnionBounds(arrangementMeta.map((m) => m.rect));
+    const gridCols = layout === 'grid'
+        ? Math.max(1, Number.isFinite(columns) ? Math.floor(columns) : Math.ceil(Math.sqrt(arrangementMeta.length)))
+        : 1;
+    const compactSpacingX = layout === 'row'
+        ? Math.max(8, needsGrouping ? Math.min(spacingX, 80) : spacingX)
+        : Math.max(8, spacingX);
+    const compactSpacingY = layout === 'row'
+        ? Math.max(8, needsGrouping ? Math.min(spacingY, 60) : spacingY)
+        : Math.max(8, spacingY);
+    const groupGap = Math.max(compactSpacingX * 1.5, 24);
     const targetIds = new Set(sorted.map((n) => n.id));
     const ancestorIds = new Set();
     for (const node of sorted) {
@@ -2419,55 +2448,178 @@ async function arrangeNodes(nodeIds, layout = 'row', columns, spacingX = 120, sp
             cur = cur.parent;
         }
     }
-    const blockers = [];
+    const blockersByParent = new Map();
     if (avoidOverlaps) {
         await traverseNodes(figma.currentPage, async (node) => {
             if (!targetIds.has(node.id) &&
                 !ancestorIds.has(node.id) &&
                 node.type !== 'SECTION' &&
                 'x' in node && 'y' in node && 'width' in node && 'height' in node) {
-                blockers.push({ x: node.x, y: node.y, width: node.width, height: node.height });
+                const parent = node.parent;
+                const parentId = parent && parent.type !== 'PAGE' ? parent.id : 'page';
+                const sceneRect = sceneNodeToRect(node);
+                const list = blockersByParent.get(parentId) || [];
+                list.push({
+                    x: node.x,
+                    y: node.y,
+                    width: node.width,
+                    height: node.height,
+                });
+                blockersByParent.set(parentId, list);
             }
             return true;
         });
     }
-    const placedRects = [];
     const arranged = [];
-    const beforeQuality = evaluateArrangementQuality(sorted.map(sceneNodeToRect), blockers);
-    for (let i = 0; i < sorted.length; i++) {
-        const node = sorted[i];
-        let x = baseX;
-        let y = baseY;
-        if (layout === 'row') {
-            x = baseX + i * (maxWidth + spacingX);
+    const allBlockers = [...blockersByParent.values()].flat();
+    const beforeQuality = evaluateArrangementQuality(arrangementMeta.map((item) => item.rect), allBlockers);
+    const parentGroups = new Map();
+    for (const item of arrangementMeta) {
+        const parentId = item.parentId || 'page';
+        if (!parentGroups.has(parentId))
+            parentGroups.set(parentId, []);
+        parentGroups.get(parentId).push(item);
+    }
+    const parentIds = [...parentGroups.keys()];
+    for (const parentId of parentIds) {
+        const parentItems = parentGroups.get(parentId);
+        if (parentItems.length === 0)
+            continue;
+        const placedRects = [];
+        const localBlockers = blockersByParent.get(parentId) || [];
+        const baseX = container
+            ? Math.max(Number.isFinite(startX) ? startX : containerPad, containerPad)
+            : (Number.isFinite(startX)
+                ? startX
+                : Math.min(...parentItems.map((item) => item.localRect.x)));
+        const baseY = container
+            ? Math.max(Number.isFinite(startY) ? startY : containerPad, containerPad)
+            : (Number.isFinite(startY)
+                ? startY
+                : Math.min(...parentItems.map((item) => item.localRect.y)));
+        const localMaxRight = container
+            ? container.width - containerPad
+            : Number.POSITIVE_INFINITY;
+        const localMaxWidth = Math.max(...parentItems.map((item) => item.localRect.width));
+        const localMaxHeight = Math.max(...parentItems.map((item) => item.localRect.height));
+        if (layout === 'row' && needsGrouping) {
+            const groups = new Map();
+            const groupLabels = new Map();
+            for (const item of parentItems) {
+                if (!groups.has(item.groupKey)) {
+                    groups.set(item.groupKey, []);
+                    groupLabels.set(item.groupKey, item.groupLabel);
+                }
+                groups.get(item.groupKey).push(item);
+            }
+            const rows = Array.from(groups.entries()).map(([key, groupItems]) => {
+                const sortedGroup = [...groupItems].sort((a, b) => (b.area - a.area) || (a.localRect.y - b.localRect.y));
+                const area = sortedGroup.reduce((sum, i) => sum + i.area, 0);
+                return {
+                    key,
+                    label: groupLabels.get(key) || key,
+                    area,
+                    items: sortedGroup,
+                };
+            }).sort((a, b) => (b.area - a.area) || a.label.localeCompare(b.label));
+            let groupCursorY = baseY;
+            for (const row of rows) {
+                let rowCursorX = baseX;
+                let rowCursorY = groupCursorY;
+                let rowMaxHeight = 0;
+                let rowMaxUsedY = baseY;
+                for (const item of row.items) {
+                    if (localMaxRight !== Number.POSITIVE_INFINITY && rowCursorX + item.localRect.width > localMaxRight && rowCursorX > baseX) {
+                        rowCursorX = baseX;
+                        rowCursorY += rowMaxHeight + compactSpacingY;
+                        rowMaxHeight = 0;
+                    }
+                    const localCandidate = {
+                        x: rowCursorX,
+                        y: rowCursorY,
+                        width: item.localRect.width,
+                        height: item.localRect.height,
+                    };
+                    let candidate = localCandidate;
+                    if (avoidOverlaps) {
+                        candidate = resolveCollisionCandidate(candidate, localBlockers, placedRects, 'row', compactSpacingX, compactSpacingY, placementPolicy, container ? { x: 0, y: 0, width: container.width, height: container.height } : undefined, containerPad);
+                    }
+                    item.node.x = candidate.x;
+                    item.node.y = candidate.y;
+                    placedRects.push(candidate);
+                    rowMaxHeight = Math.max(rowMaxHeight, candidate.height);
+                    rowMaxUsedY = Math.max(rowMaxUsedY, candidate.y + candidate.height);
+                    arranged.push({
+                        id: item.node.id,
+                        x: candidate.x,
+                        y: candidate.y,
+                        groupBy: row.key,
+                        groupLabel: row.label,
+                        area: item.area,
+                    });
+                    rowCursorX = candidate.x + candidate.width + compactSpacingX;
+                }
+                groupCursorY = Math.max(groupCursorY, rowMaxUsedY) + compactSpacingY;
+                if (rowMaxHeight > 0) {
+                    groupCursorY += Math.max(groupGap - compactSpacingY, compactSpacingY);
+                }
+            }
+            continue;
         }
-        else if (layout === 'column') {
-            y = baseY + i * (maxHeight + spacingY);
+        const ordered = [...parentItems].sort((a, b) => {
+            if (layout === 'column')
+                return (b.area - a.area) || (a.localRect.y - b.localRect.y) || (a.localRect.x - b.localRect.x);
+            if (layout === 'grid')
+                return (b.area - a.area) || (a.localRect.y - b.localRect.y) || (a.localRect.x - b.localRect.x);
+            return (b.area - a.area) || (a.localRect.x - b.localRect.x) || (a.localRect.y - b.localRect.y);
+        });
+        let rowX = baseX;
+        let colY = baseY;
+        for (let i = 0; i < ordered.length; i++) {
+            const item = ordered[i];
+            const node = item.node;
+            let localCandidate;
+            if (layout === 'row') {
+                localCandidate = { x: rowX, y: baseY, width: item.localRect.width, height: item.localRect.height };
+                rowX += item.localRect.width + compactSpacingX;
+            }
+            else if (layout === 'column') {
+                localCandidate = { x: baseX, y: colY, width: item.localRect.width, height: item.localRect.height };
+                colY += item.localRect.height + compactSpacingY;
+            }
+            else {
+                const col = i % gridCols;
+                const row = Math.floor(i / gridCols);
+                localCandidate = {
+                    x: baseX + col * (localMaxWidth + compactSpacingX),
+                    y: baseY + row * (localMaxHeight + compactSpacingY),
+                    width: item.localRect.width,
+                    height: item.localRect.height,
+                };
+            }
+            let candidate = localCandidate;
+            if (avoidOverlaps) {
+                candidate = resolveCollisionCandidate(candidate, localBlockers, placedRects, layout, compactSpacingX, compactSpacingY, placementPolicy, container ? { x: 0, y: 0, width: container.width, height: container.height } : undefined, containerPad);
+            }
+            node.x = candidate.x;
+            node.y = candidate.y;
+            placedRects.push(candidate);
+            arranged.push({
+                id: node.id,
+                x: candidate.x,
+                y: candidate.y,
+                groupBy: item.groupKey,
+                groupLabel: item.groupLabel,
+                area: item.area,
+            });
         }
-        else {
-            const col = i % gridCols;
-            const row = Math.floor(i / gridCols);
-            x = baseX + col * (maxWidth + spacingX);
-            y = baseY + row * (maxHeight + spacingY);
-        }
-        let candidate = { x, y, width: node.width, height: node.height };
-        if (avoidOverlaps) {
-            candidate = resolveCollisionCandidate(candidate, blockers, placedRects, layout, spacingX, spacingY, placementPolicy);
-        }
-        if (container) {
-            candidate = clampRectIntoContainer(candidate, container, containerPad);
-        }
-        node.x = candidate.x;
-        node.y = candidate.y;
-        placedRects.push(candidate);
-        arranged.push({ id: node.id, x: node.x, y: node.y });
     }
     if (focus) {
         figma.viewport.scrollAndZoomIntoView(sorted);
     }
     const afterRects = sorted.map(sceneNodeToRect);
     const afterUnion = getUnionBounds(afterRects);
-    const afterQuality = evaluateArrangementQuality(afterRects, blockers);
+    const afterQuality = evaluateArrangementQuality(afterRects, allBlockers);
     const parentMismatchCount = container
         ? sorted.filter((n) => { var _a; return ((_a = n.parent) === null || _a === void 0 ? void 0 : _a.id) !== container.id; }).length
         : 0;
@@ -2499,6 +2651,7 @@ async function arrangeNodes(nodeIds, layout = 'row', columns, spacingX = 120, sp
             before: beforeQuality,
             after: afterQuality,
             overlapDelta: beforeQuality.overlapCount - afterQuality.overlapCount,
+            nodeOverlapDelta: beforeQuality.overlapBetweenCandidates - afterQuality.overlapBetweenCandidates,
             parentMismatchCount,
             outsideContainerCount,
         },
@@ -2736,7 +2889,11 @@ function getUnionBounds(rects) {
 function countOverlaps(candidates, blockers) {
     let count = 0;
     for (const c of candidates) {
+        if (isDegenerateRect(c))
+            continue;
         for (const b of blockers) {
+            if (isDegenerateRect(b))
+                continue;
             if (rectsOverlap(c, b)) {
                 count += 1;
             }
@@ -2759,6 +2916,7 @@ function clampRectIntoContainer(rect, container, padding = 0) {
 }
 function evaluateArrangementQuality(candidates, blockers) {
     const overlapCount = countOverlaps(candidates, blockers);
+    const overlapBetweenCandidates = countCandidateOverlaps(candidates);
     let minGap = Number.POSITIVE_INFINITY;
     for (let i = 0; i < candidates.length; i++) {
         for (let j = i + 1; j < candidates.length; j++) {
@@ -2771,38 +2929,109 @@ function evaluateArrangementQuality(candidates, blockers) {
     }
     if (!Number.isFinite(minGap))
         minGap = 0;
-    return { overlapCount, minGap };
+    return { overlapCount, overlapBetweenCandidates, minGap };
+}
+function countCandidateOverlaps(candidates) {
+    let count = 0;
+    for (let i = 0; i < candidates.length; i++) {
+        if (isDegenerateRect(candidates[i]))
+            continue;
+        for (let j = i + 1; j < candidates.length; j++) {
+            if (isDegenerateRect(candidates[j]))
+                continue;
+            if (rectsOverlap(candidates[i], candidates[j])) {
+                count += 1;
+            }
+        }
+    }
+    return count;
 }
 function rectsOverlap(a, b) {
+    if (isDegenerateRect(a) || isDegenerateRect(b))
+        return false;
     return !(a.x + a.width <= b.x ||
         b.x + b.width <= a.x ||
         a.y + a.height <= b.y ||
         b.y + b.height <= a.y);
 }
-function resolveCollisionCandidate(rect, blockers, placed, layout, spacingX, spacingY, policy = 'preserve_lane') {
+function isDegenerateRect(rect, eps = 0.5) {
+    return (!Number.isFinite(rect.width) ||
+        !Number.isFinite(rect.height) ||
+        rect.width <= eps ||
+        rect.height <= eps);
+}
+function resolveCollisionCandidate(rect, blockers, placed, layout, spacingX, spacingY, policy = 'preserve_lane', container, containerPadding = 0) {
+    const normalizedSpacingX = Number.isFinite(spacingX) ? Math.max(0, spacingX) : 0;
+    const normalizedSpacingY = Number.isFinite(spacingY) ? Math.max(0, spacingY) : 0;
+    const collisionPad = Math.max(normalizedSpacingX, normalizedSpacingY);
     const stepX = policy === 'min_move'
-        ? Math.max(16, Math.min(48, Math.round(Math.max(20, spacingX) / 3)))
-        : Math.max(20, spacingX);
+        ? Math.max(12, Math.min(36, Math.round(Math.max(16, normalizedSpacingX) / 3)))
+        : Math.max(16, Math.round(Math.max(20, normalizedSpacingX) / 2));
     const stepY = policy === 'min_move'
-        ? Math.max(16, Math.min(48, Math.round(Math.max(20, spacingY) / 3)))
-        : Math.max(20, spacingY);
-    const maxTries = 400;
-    const maxCrossShift = policy === 'strict_no_overlap' ? Number.POSITIVE_INFINITY : (policy === 'min_move' ? stepY * 3 : stepY * 1.2);
+        ? Math.max(12, Math.min(36, Math.round(Math.max(16, normalizedSpacingY) / 3)))
+        : Math.max(16, Math.round(Math.max(20, normalizedSpacingY) / 2));
+    const maxTries = policy === 'strict_no_overlap' ? 3600 : 500;
+    const maxCrossShift = policy === 'strict_no_overlap'
+        ? Number.POSITIVE_INFINITY
+        : (policy === 'min_move' ? Math.max(stepY * 2, 80) : stepY * 2);
     const maxPrimaryShift = policy === 'strict_no_overlap'
         ? Number.POSITIVE_INFINITY
-        : (policy === 'min_move' ? Math.max(stepX * 12, 720) : Math.max(stepX * 24, 1600));
-    let candidate = Object.assign({}, rect);
+        : (policy === 'min_move' ? Math.max(stepX * 10, 480) : Math.max(stepX * 18, 900));
+    const candidateSet = new Set();
+    const obstacleRects = [...blockers, ...placed];
+    const clampInContainer = (r) => {
+        if (!container)
+            return r;
+        return clampRectIntoContainer(r, container, containerPadding);
+    };
+    const inflate = (r, pad) => {
+        if (!pad)
+            return r;
+        return {
+            x: r.x - pad,
+            y: r.y - pad,
+            width: r.width + pad * 2,
+            height: r.height + pad * 2,
+        };
+    };
+    const normalize = (r) => {
+        const normalized = clampInContainer(r);
+        return isDegenerateRect(normalized) ? null : normalized;
+    };
     const collides = (r) => {
-        for (const b of blockers)
-            if (rectsOverlap(r, b))
+        const normalized = normalize(r);
+        if (!normalized)
+            return false;
+        const expandedCandidate = inflate(normalized, collisionPad);
+        for (const b of blockers) {
+            if (isDegenerateRect(b))
+                continue;
+            if (rectsOverlap(expandedCandidate, inflate(b, collisionPad)))
                 return true;
-        for (const p of placed)
-            if (rectsOverlap(r, p))
+        }
+        for (const p of placed) {
+            if (isDegenerateRect(p))
+                continue;
+            if (rectsOverlap(expandedCandidate, inflate(p, collisionPad)))
                 return true;
+        }
         return false;
     };
+    const addCandidate = (pool, x, y) => {
+        const normalized = normalize(Object.assign(Object.assign({}, rect), { x, y, width: rect.width, height: rect.height }));
+        if (!normalized)
+            return;
+        const key = `${normalized.x},${normalized.y}`;
+        if (candidateSet.has(key))
+            return;
+        candidateSet.add(key);
+        pool.push(normalized);
+    };
+    const rankByDistance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    let candidate = clampInContainer(Object.assign({}, rect));
     if (!collides(candidate))
         return candidate;
+    const fallbackCandidates = [];
     if (layout === 'row') {
         for (let i = 1; i < maxTries; i++) {
             if (i * stepX > maxPrimaryShift)
@@ -2811,20 +3040,20 @@ function resolveCollisionCandidate(rect, blockers, placed, layout, spacingX, spa
             const py = rect.y;
             const primary = Object.assign(Object.assign({}, rect), { x: px, y: py });
             if (!collides(primary))
-                return primary;
+                return clampInContainer(primary);
             if (maxCrossShift > 0 && maxCrossShift !== Number.POSITIVE_INFINITY) {
                 for (const dy of [stepY, -stepY, stepY * 2, -stepY * 2]) {
                     if (Math.abs(dy) > maxCrossShift)
                         continue;
                     const alt = Object.assign(Object.assign({}, rect), { x: px, y: py + dy });
                     if (!collides(alt))
-                        return alt;
+                        return clampInContainer(alt);
                 }
             }
             if (maxCrossShift === Number.POSITIVE_INFINITY) {
                 const alt = Object.assign(Object.assign({}, rect), { x: px, y: rect.y + i * stepY });
                 if (!collides(alt))
-                    return alt;
+                    return clampInContainer(alt);
             }
         }
     }
@@ -2836,33 +3065,133 @@ function resolveCollisionCandidate(rect, blockers, placed, layout, spacingX, spa
             const px = rect.x;
             const primary = Object.assign(Object.assign({}, rect), { x: px, y: py });
             if (!collides(primary))
-                return primary;
+                return clampInContainer(primary);
             if (maxCrossShift > 0 && maxCrossShift !== Number.POSITIVE_INFINITY) {
                 for (const dx of [stepX, -stepX, stepX * 2, -stepX * 2]) {
                     if (Math.abs(dx) > maxCrossShift)
                         continue;
                     const alt = Object.assign(Object.assign({}, rect), { x: px + dx, y: py });
                     if (!collides(alt))
-                        return alt;
+                        return clampInContainer(alt);
                 }
             }
             if (maxCrossShift === Number.POSITIVE_INFINITY) {
                 const alt = Object.assign(Object.assign({}, rect), { x: rect.x + i * stepX, y: py });
                 if (!collides(alt))
-                    return alt;
+                    return clampInContainer(alt);
             }
         }
     }
     else {
         for (let i = 0; i < maxTries; i++) {
+            const alt = Object.assign(Object.assign({}, rect), { x: rect.x + i * stepX, y: rect.y + i * stepY });
             if (policy !== 'strict_no_overlap' && (i * stepX > maxPrimaryShift || i * stepY > maxPrimaryShift))
                 break;
-            const alt = Object.assign(Object.assign({}, rect), { x: rect.x + i * stepX, y: rect.y + i * stepY });
             if (!collides(alt))
-                return alt;
+                return clampInContainer(alt);
+        }
+    }
+    if (policy === 'strict_no_overlap') {
+        const xs = new Set([rect.x, rect.x - stepX, rect.x + stepX]);
+        const ys = new Set([rect.y, rect.y - stepY, rect.y + stepY]);
+        for (const obs of obstacleRects) {
+            if (isDegenerateRect(obs))
+                continue;
+            xs.add(obs.x - rect.width - normalizedSpacingX);
+            xs.add(obs.x + obs.width + normalizedSpacingX);
+            xs.add(obs.x);
+            xs.add(obs.x + obs.width - rect.width);
+            ys.add(obs.y - rect.height - normalizedSpacingY);
+            ys.add(obs.y + obs.height + normalizedSpacingY);
+            ys.add(obs.y);
+            ys.add(obs.y + obs.height - rect.height);
+        }
+        const orderedX = Array.from(xs).sort((a, b) => Math.abs(a - rect.x) - Math.abs(b - rect.x) || a - b);
+        const orderedY = Array.from(ys).sort((a, b) => Math.abs(a - rect.y) - Math.abs(b - rect.y) || a - b);
+        for (const y of orderedY) {
+            for (const x of orderedX) {
+                addCandidate(fallbackCandidates, x, y);
+            }
+        }
+        const ringLimit = Math.max(120, Math.ceil(3600 / Math.max(stepX, 1)));
+        for (let ring = 1; ring <= ringLimit; ring++) {
+            const dx = ring * stepX;
+            const dy = ring * stepY;
+            addCandidate(fallbackCandidates, rect.x + dx, rect.y);
+            addCandidate(fallbackCandidates, rect.x - dx, rect.y);
+            addCandidate(fallbackCandidates, rect.x, rect.y + dy);
+            addCandidate(fallbackCandidates, rect.x, rect.y - dy);
+            addCandidate(fallbackCandidates, rect.x + dx, rect.y + dy);
+            addCandidate(fallbackCandidates, rect.x - dx, rect.y + dy);
+            addCandidate(fallbackCandidates, rect.x + dx, rect.y - dy);
+            addCandidate(fallbackCandidates, rect.x - dx, rect.y - dy);
+            if (ring > maxTries)
+                break;
+        }
+        fallbackCandidates.sort((a, b) => rankByDistance(a, rect) - rankByDistance(b, rect));
+        for (const fallback of fallbackCandidates) {
+            if (!collides(fallback))
+                return fallback;
         }
     }
     return candidate;
+}
+function isPositionableNode(node) {
+    return (!!node &&
+        node.type !== 'DOCUMENT' &&
+        node.type !== 'PAGE' &&
+        'x' in node &&
+        'y' in node &&
+        'width' in node &&
+        'height' in node);
+}
+function collapseFullSelectionGroups(nodes) {
+    var _a;
+    const selectedIds = new Set(nodes.map((node) => node.id));
+    const parentToChildren = new Map();
+    const promotableParentTypes = ['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE'];
+    for (const node of nodes) {
+        const parent = node.parent;
+        if (!parent || parent.type === 'PAGE' || parent.type === 'DOCUMENT')
+            continue;
+        if (!promotableParentTypes.includes(parent.type) || selectedIds.has(parent.id))
+            continue;
+        const entry = parentToChildren.get(parent.id);
+        if (entry) {
+            entry.selectedChildren.add(node.id);
+        }
+        else {
+            parentToChildren.set(parent.id, { parent, selectedChildren: new Set([node.id]) });
+        }
+    }
+    const parentToPromote = new Set();
+    for (const { parent, selectedChildren } of parentToChildren.values()) {
+        const children = parent.children.filter(isPositionableNode);
+        if (children.length < 2)
+            continue;
+        const allChildrenSelected = children.every((child) => selectedIds.has(child.id));
+        if (!allChildrenSelected)
+            continue;
+        if (children.some((child) => selectedChildren.has(child.id))) {
+            parentToPromote.add(parent.id);
+        }
+    }
+    if (parentToPromote.size === 0)
+        return nodes;
+    const collapsed = nodes.filter((node) => {
+        const parent = node.parent;
+        return !(parent && parentToPromote.has(parent.id));
+    });
+    const promotedNodes = new Set(collapsed.map((node) => node.id));
+    for (const id of parentToPromote) {
+        const parentNode = (_a = parentToChildren.get(id)) === null || _a === void 0 ? void 0 : _a.parent;
+        if (parentNode && isPositionableNode(parentNode) && !promotedNodes.has(parentNode.id)) {
+            const parentScene = parentNode;
+            collapsed.push(parentScene);
+            promotedNodes.add(parentScene.id);
+        }
+    }
+    return dedupeNodes(collapsed);
 }
 function getNodePage(node) {
     let current = node;
@@ -2872,6 +3201,47 @@ function getNodePage(node) {
         current = current.parent;
     }
     return null;
+}
+function normalizeArrangeGroupLabel(raw) {
+    return raw
+        .replace(/\s+/g, ' ')
+        .replace(/\/\./g, '-')
+        .trim();
+}
+async function resolveArrangeGroup(node, groupBy) {
+    if (groupBy === 'none') {
+        return {
+            groupKey: 'all',
+            groupLabel: 'all',
+        };
+    }
+    const category = node.type;
+    if (groupBy === 'type') {
+        return {
+            groupKey: category,
+            groupLabel: category,
+        };
+    }
+    let componentName = '';
+    if (node.type === 'INSTANCE') {
+        const component = await getInstanceMainComponentSafe(node);
+        if (component === null || component === void 0 ? void 0 : component.name)
+            componentName = component.name;
+    }
+    else if (node.type === 'COMPONENT' || node.type === 'COMPONENT_SET') {
+        componentName = node.name;
+    }
+    if (!componentName) {
+        return {
+            groupKey: category,
+            groupLabel: category,
+        };
+    }
+    const normalized = normalizeArrangeGroupLabel(componentName);
+    return {
+        groupKey: `${category}::${normalized}`,
+        groupLabel: `${category}: ${normalized}`,
+    };
 }
 async function getInstanceMainComponentSafe(instance) {
     var _a;
