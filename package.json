@@ -1,6 +1,6 @@
 {
   "name": "supercharged-figma-mcp",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Supercharged Figma MCP Server with full automation support",
   "main": "dist/server.js",
   "type": "module",

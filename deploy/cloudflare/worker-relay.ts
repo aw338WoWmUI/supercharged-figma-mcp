@@ -13,6 +13,7 @@ export interface Env {
 
 const RELAY_PATH = '/supercharged-figma/ws';
 const MCP_PATH = '/mcp';
+const WORKER_VERSION = '1.0.4';
 
 interface SessionContext {
   createdAt: number;
@@ -267,6 +268,7 @@ export default {
     if (url.pathname === '/healthz') {
       return json({
         ok: true,
+        version: WORKER_VERSION,
         service: 'supercharged-figma-worker',
         relayPath: RELAY_PATH,
         mcpPath: MCP_PATH,

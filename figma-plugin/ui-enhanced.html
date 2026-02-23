@@ -2091,8 +2091,10 @@
       return `claude mcp add supercharged-figma -- npx -y supercharged-figma-mcp --remote ${parsed.relayUrl}`;
     }
 
+    const FALLBACK_HOSTED_MCP_URL = 'https://supercharged-figma-relay.gpw2333.workers.dev/mcp';
+
     function buildHostedMcpJsonConfig() {
-      let mcpUrl = 'https://your-domain.example.com/mcp';
+      let mcpUrl = FALLBACK_HOSTED_MCP_URL;
       const parsed = parseRelayUrl();
       if (parsed && !isLocalRelayHost(parsed.url.hostname)) {
         const scheme = parsed.url.protocol === 'wss:' ? 'https:' : 'http:';
