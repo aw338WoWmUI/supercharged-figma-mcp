@@ -863,6 +863,12 @@ const TOOLS: Tool[] = [
         nodeIds: { type: 'array', items: { type: 'string' }, description: 'Optional. If omitted, uses current selection.' },
         layout: { type: 'string', enum: ['row', 'column', 'grid'], default: 'row' },
         columns: { type: 'number', description: 'Used when layout=grid. Auto-calculated if omitted.' },
+        groupBy: {
+          type: 'string',
+          enum: ['none', 'type', 'typeAndComponent'],
+          default: 'none',
+          description: 'When set to type/typeAndComponent, nodes are grouped by layer type and optionally component name before arranging.'
+        },
         spacingX: { type: 'number', default: 120 },
         spacingY: { type: 'number', default: 120 },
         startX: { type: 'number', description: 'Optional fixed start X. Defaults to min x of selected nodes.' },

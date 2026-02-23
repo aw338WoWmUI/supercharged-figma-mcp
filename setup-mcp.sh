@@ -1,63 +1,67 @@
 #!/bin/bash
-# Setup MCP configuration for all supported clients
+# Setup MCP configuration for all supported clients (project scope)
 # Usage: ./setup-mcp.sh
+
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_PATH="$SCRIPT_DIR/dist/server.js"
-RELAY_URL="ws://localhost:8080"
+RELAY_URL="wss://supercharged-figma-relay.gpw2333.workers.dev/supercharged-figma/ws"
+MCP_HTTP_URL="https://supercharged-figma-relay.gpw2333.workers.dev/mcp"
 
-echo "Setting up MCP configuration for all clients..."
+echo "Setting up project-scoped MCP configuration..."
+echo "Project: $SCRIPT_DIR"
 echo "Server path: $SERVER_PATH"
 echo "Relay URL: $RELAY_URL"
 echo ""
 
-# Create directories
-mkdir -p ~/.config/mcp
-mkdir -p ~/.config/kimi
-mkdir -p ~/.cursor
-mkdir -p ~/.codex
+# Project-local output files
+PROJECT_MCP_JSON_DIR="$SCRIPT_DIR/.config/mcp"
+PROJECT_KIMI_DIR="$SCRIPT_DIR/.config/kimi"
+PROJECT_CURSOR_DIR="$SCRIPT_DIR/.cursor"
+PROJECT_CLAUDE_FILE="$SCRIPT_DIR/.claude.json"
+PROJECT_MCP_JSON_FILE="$PROJECT_MCP_JSON_DIR/figma.json"
 
-# Create unified JSON config
+# Create directories
+mkdir -p "$PROJECT_MCP_JSON_DIR" "$PROJECT_KIMI_DIR" "$PROJECT_CURSOR_DIR"
+
+# Create unified JSON config (command mode, remote relay)
 JSON_CONFIG="{
   \"mcpServers\": {
     \"supercharged-figma\": {
       \"command\": \"node\",
       \"args\": [
         \"$SERVER_PATH\",
-        \"--relay-server=$RELAY_URL\"
+        \"--remote\",
+        \"$RELAY_URL\"
       ],
       \"env\": {}
     }
   }
 }"
 
-echo "$JSON_CONFIG" > ~/.config/mcp/figma.json
-echo "✓ Created ~/.config/mcp/figma.json"
+echo "$JSON_CONFIG" > "$PROJECT_MCP_JSON_FILE"
+echo "✓ Created $PROJECT_MCP_JSON_FILE"
 
-# Link to Cursor
-ln -sf ~/.config/mcp/figma.json ~/.cursor/mcp.json
-echo "✓ Linked to ~/.cursor/mcp.json"
+# Link to Cursor (project scope)
+ln -sf "$PROJECT_MCP_JSON_FILE" "$PROJECT_CURSOR_DIR/mcp.json"
+echo "✓ Linked to $PROJECT_CURSOR_DIR/mcp.json"
 
-# Link to Kimi
-ln -sf ~/.config/mcp/figma.json ~/.config/kimi/mcp.json
-echo "✓ Linked to ~/.config/kimi/mcp.json"
+# Link to Kimi (project scope)
+ln -sf "$PROJECT_MCP_JSON_FILE" "$PROJECT_KIMI_DIR/mcp.json"
+echo "✓ Linked to $PROJECT_KIMI_DIR/mcp.json"
 
-# Create Codex TOML config
-TOML_CONFIG="# OpenAI Codex MCP Configuration
-[mcp_servers.supercharged-figma]
-command = \"node\"
-args = [\"$SERVER_PATH\", \"--relay-server=$RELAY_URL\"]
-"
+# Create project Claude MCP config file
+CLAUDE_JSON_CONFIG="{
+  \"mcpServers\": {
+    \"supercharged-figma\": {
+      \"url\": \"$MCP_HTTP_URL\"
+    }
+  }
+}"
+echo "$CLAUDE_JSON_CONFIG" > "$PROJECT_CLAUDE_FILE"
+echo "✓ Created $PROJECT_CLAUDE_FILE"
 
-echo "$TOML_CONFIG" > ~/.codex/config.toml
-echo "✓ Created ~/.codex/config.toml"
-
-# Create Claude Desktop config (Mac)
-CLAUDE_DIR="$HOME/Library/Application Support/Claude"
-if [ -d "$CLAUDE_DIR" ]; then
-    echo "$JSON_CONFIG" > "$CLAUDE_DIR/claude_desktop_config.json"
-    echo "✓ Created Claude Desktop config"
-fi
 
 echo ""
 echo "Setup complete! 🎉"

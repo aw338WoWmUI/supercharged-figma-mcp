@@ -17,6 +17,11 @@ Thumbs.db
 *.swp
 *.swo
 
+# MCP / Cursor / Claude local config (project-level)
+.claude.json
+.config/mcp/figma.json
+.cursor/mcp.json
+
 # Logs
 *.log
 npm-debug.log*

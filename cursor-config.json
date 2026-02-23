@@ -3,11 +3,11 @@
     "SuperchargedFigma": {
       "command": "node",
       "args": [
-        "/Users/spark/Projects/FigmaAgentDesign/supercharged-mcp/dist/server.js"
+        "/Users/spark/Projects/FigmaAgentDesign/supercharged-mcp/dist/server.js",
+        "--remote",
+        "wss://supercharged-figma-relay.gpw2333.workers.dev/supercharged-figma/ws"
       ],
-      "env": {
-        "FIGMA_WS_URL": "ws://localhost:3333"
-      }
+      "env": {}
     }
   }
 }
