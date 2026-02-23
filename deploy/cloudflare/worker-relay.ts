@@ -13,7 +13,7 @@ export interface Env {
 
 const RELAY_PATH = '/supercharged-figma/ws';
 const MCP_PATH = '/mcp';
-const WORKER_VERSION = '1.0.4';
+const WORKER_VERSION = '1.0.5';
 
 interface SessionContext {
   createdAt: number;

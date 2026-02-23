@@ -918,7 +918,7 @@
           <span class="step-badge">Step 3</span>
           <span id="step3-title" class="step-title">Connect to Relay Server</span>
         </div>
-        <input type="text" id="relay-url" placeholder="ws://127.0.0.1:8888" value="ws://127.0.0.1:8888">
+        <input type="text" id="relay-url" placeholder="wss://supercharged-figma-relay.gpw2333.workers.dev/supercharged-figma/ws" value="wss://supercharged-figma-relay.gpw2333.workers.dev/supercharged-figma/ws">
       </div>
 
       <div class="step-card">
@@ -928,7 +928,7 @@
         </div>
         <div id="step4-waiting" class="relay-help-hint">先完成 Step 3 连接后，此处会显示 connect prompt 与 Channel Code。</div>
         <div id="connect-prompt-row" class="prompt-row hidden">
-          <div id="prompt-viewer" class="prompt-viewer">connect_to_relay {"relayUrl":"ws://127.0.0.1:8888","channelCode":"--"}</div>
+          <div id="prompt-viewer" class="prompt-viewer">connect_to_relay {"relayUrl":"wss://supercharged-figma-relay.gpw2333.workers.dev/supercharged-figma/ws","channelCode":"--"}</div>
           <button id="copy-prompt-btn" class="secondary icon-btn" onclick="copyConnectPrompt()" title="复制 Prompt" aria-label="复制 Prompt">⧉</button>
         </div>
         <div id="channel-section" class="hidden channel-card" style="padding: 10px; background: var(--ui-bg-secondary); border-radius: 8px; border: 1px solid var(--ui-border);">
@@ -2002,7 +2002,7 @@
     }
 
     function buildConnectPrompt() {
-      const relayUrl = document.getElementById('relay-url').value.trim() || 'ws://127.0.0.1:8888';
+      const relayUrl = document.getElementById('relay-url').value.trim() || 'wss://supercharged-figma-relay.gpw2333.workers.dev/supercharged-figma/ws';
       const payload = {
         relayUrl,
         channelCode: currentChannelCode || '--',
@@ -2027,7 +2027,7 @@
 
     function getRelayUrlInput() {
       const value = document.getElementById('relay-url')?.value?.trim();
-      return value || 'ws://127.0.0.1:8888';
+      return value || 'wss://supercharged-figma-relay.gpw2333.workers.dev/supercharged-figma/ws';
     }
 
     function parseRelayUrl() {
