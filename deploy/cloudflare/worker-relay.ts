@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
+import { FULL_TOOLS_FALLBACK } from './fallback-tools.js';
 
 export interface Env {
   RELAY_ROOM: DurableObjectNamespace;
@@ -53,6 +54,8 @@ const BASE_TOOLS: Tool[] = [
     },
   },
 ];
+
+const FALLBACK_TOOLSET: Tool[] = [ ...FULL_TOOLS_FALLBACK ];
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
@@ -114,7 +117,7 @@ function isAuthorized(request: Request, env: Env): boolean {
 }
 
 async function buildTools(env: Env, channelCode: string | null): Promise<Tool[]> {
-  if (!channelCode) return BASE_TOOLS;
+  if (!channelCode) return FALLBACK_TOOLSET;
 
   const bridgeResp = await bridgeCall(env, channelCode, {
     type: 'get_tools',
@@ -122,14 +125,14 @@ async function buildTools(env: Env, channelCode: string | null): Promise<Tool[]>
     payload: {},
   }, 15000);
 
-  if (!bridgeResp.ok) return BASE_TOOLS;
+  if (!bridgeResp.ok) return FALLBACK_TOOLSET;
   const tools = (bridgeResp.result as any)?.tools;
-  if (!Array.isArray(tools)) return BASE_TOOLS;
+  if (!Array.isArray(tools)) return FALLBACK_TOOLSET;
 
   // De-duplicate potential overlap with base tools
-  const existing = new Set(BASE_TOOLS.map((t) => t.name));
+  const existing = new Set(FALLBACK_TOOLSET.map((t) => t.name));
   const normalized = tools.filter((t: any) => t && typeof t.name === 'string' && !existing.has(t.name));
-  return [...BASE_TOOLS, ...normalized];
+  return [...FALLBACK_TOOLSET, ...normalized];
 }
 
 async function createMcpServer(env: Env, session: SessionContext): Promise<Server> {
