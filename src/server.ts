@@ -22,6 +22,9 @@ import { EmbeddedRelay } from './runtime/embedded-relay.js';
 import { InstanceManager } from './runtime/instance-manager.js';
 import { format } from 'node:util';
 import { createServer, IncomingMessage, Server as HttpServer, ServerResponse } from 'node:http';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 // MCP over stdio requires stdout to be protocol-only JSON-RPC.
 // Route operational logs to stderr to avoid breaking the transport.
@@ -31,6 +34,7 @@ const logToStderr = (...args: unknown[]) => {
 console.log = logToStderr;
 console.info = logToStderr;
 console.warn = logToStderr;
+const MCP_SERVER_VERSION = '1.0.3';
 
 // WebSocket connection to Figma Plugin via Relay Server
 class FigmaPluginConnection {
@@ -43,6 +47,15 @@ class FigmaPluginConnection {
   private connected = false;
   private figmaConnected = false;
   private channelId: string | null = null;
+  private connectSeq = 0;
+  private readonly debugEvents: Array<{ ts: string; event: string; detail?: string }> = [];
+
+  private pushDebug(event: string, detail?: string) {
+    this.debugEvents.push({ ts: new Date().toISOString(), event, detail });
+    if (this.debugEvents.length > 80) {
+      this.debugEvents.splice(0, this.debugEvents.length - 80);
+    }
+  }
 
   private parseIncomingMessage(data: WebSocket.Data): any | null {
     try {
@@ -67,6 +80,7 @@ class FigmaPluginConnection {
 
   connect(relayUrl: string, channelId: string): Promise<void> {
     const url = `${relayUrl}?channel=${channelId}&type=client`;
+    const connectId = ++this.connectSeq;
     
     return new Promise((resolve, reject) => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -76,8 +90,10 @@ class FigmaPluginConnection {
       this.connected = false;
       this.figmaConnected = false;
       this.channelId = channelId;
-      console.log(chalk.blue(`Connecting to relay server: ${url}`));
-      this.ws = new WebSocket(url);
+      console.log(chalk.blue(`[MCP pid=${process.pid}] [connect#${connectId}] Connecting to relay server: ${url}`));
+      this.pushDebug('connect_start', `connect#${connectId} url=${url}`);
+      const socket = new WebSocket(url);
+      this.ws = socket;
       let settled = false;
       let connectTimeout: NodeJS.Timeout | null = null;
 
@@ -88,9 +104,11 @@ class FigmaPluginConnection {
         fn();
       };
 
-      this.ws.on('open', () => {
+      socket.on('open', () => {
+        if (socket !== this.ws) return;
         this.connected = true;
-        console.log(chalk.green(`✓ Connected to relay (channel: ${channelId})`));
+        console.log(chalk.green(`[MCP pid=${process.pid}] [connect#${connectId}] ✓ Connected to relay (channel: ${channelId})`));
+        this.pushDebug('socket_open', `connect#${connectId} channel=${channelId}`);
 
         connectTimeout = setTimeout(() => {
           if (!this.figmaConnected) {
@@ -99,12 +117,15 @@ class FigmaPluginConnection {
         }, 30000);
       });
 
-      this.ws.on('message', (data: WebSocket.Data) => {
+      socket.on('message', (data: WebSocket.Data) => {
+        if (socket !== this.ws) return;
         const message = this.parseIncomingMessage(data);
         if (!message) return;
 
         // Handle system messages
         if (message.type === 'system') {
+          console.log(chalk.gray(`[MCP pid=${process.pid}] [connect#${connectId}] system event=${String(message.event)} figmaConnected=${String(message.figmaConnected ?? '-')}`));
+          this.pushDebug('system_event', `connect#${connectId} event=${String(message.event)} figmaConnected=${String(message.figmaConnected ?? '-')}`);
           if (message.event === 'connected') {
             this.figmaConnected = !!message.figmaConnected;
             if (this.figmaConnected) {
@@ -134,17 +155,22 @@ class FigmaPluginConnection {
         this.handleResponse(response);
       });
 
-      this.ws.on('close', () => {
+      socket.on('close', () => {
+        if (socket !== this.ws) return;
         this.connected = false;
         this.figmaConnected = false;
-        console.log(chalk.yellow('! Disconnected from relay'));
+        console.log(chalk.yellow(`[MCP pid=${process.pid}] [connect#${connectId}] ! Disconnected from relay`));
+        this.pushDebug('socket_close', `connect#${connectId}`);
         this.rejectAllPending(new Error('Disconnected from relay server'));
         if (!settled) {
           settle(() => reject(new Error('Disconnected from relay server')));
         }
       });
 
-      this.ws.on('error', (err) => {
+      socket.on('error', (err) => {
+        if (socket !== this.ws) return;
+        console.error(chalk.red(`[MCP pid=${process.pid}] [connect#${connectId}] socket error:`), err);
+        this.pushDebug('socket_error', `connect#${connectId} err=${(err as any)?.message || String(err)}`);
         if (!settled) {
           settle(() => reject(err));
         }
@@ -218,6 +244,10 @@ class FigmaPluginConnection {
     return this.channelId;
   }
 
+  getDebugEvents(): Array<{ ts: string; event: string; detail?: string }> {
+    return [...this.debugEvents];
+  }
+
   setWebSocket(ws: WebSocket) {
     this.ws = ws;
     this.connected = true;
@@ -267,16 +297,29 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'get_connection_status',
-    description: 'Check MCP<->Figma connection state before any design tool call. Use this first. If disconnected, ask user to open Figma plugin and provide channel code, then call connect_to_relay.',
+    description: 'Check MCP<->Figma connection state before any design tool call. Supports optional debug event controls to reduce noisy payloads.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        includeDebugEvents: {
+          type: 'boolean',
+          default: false,
+          description: 'Whether to include relay debugEvents in response.',
+        },
+        debugLimit: {
+          type: 'number',
+          default: 20,
+          minimum: 1,
+          maximum: 200,
+          description: 'Max number of newest debug events to include when includeDebugEvents=true.',
+        },
+      },
     },
   },
   // ===== Smart Discovery Tools =====
   {
     name: 'smart_select',
-    description: 'AI-powered node selection using natural language query. Supports current page, whole document, or explicit pageIds/pageNames.',
+    description: 'AI-powered semantic node retrieval using natural language query (fuzzy, not exact-match filtering). Supports current page, whole document, or explicit pageIds/pageNames. For deterministic exact filtering, prefer scan_by_pattern.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -332,7 +375,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'scan_by_pattern',
-    description: 'Scan nodes by pattern (name/type/size/color/layout). Supports current page, whole document, or explicit pageIds/pageNames.',
+    description: 'Scan nodes by pattern (name/type/size/color/layout). Supports current page, whole document, or explicit pageIds/pageNames. Returns paginated-like payload with `nodes` and truncation metadata.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -348,6 +391,13 @@ const TOOLS: Tool[] = [
             fillColor: { type: 'object' },
             hasAutoLayout: { type: 'boolean' },
           },
+        },
+        limit: {
+          type: 'number',
+          default: 200,
+          minimum: 1,
+          maximum: 5000,
+          description: 'Maximum matched nodes to return. Use to prevent oversized responses on large documents.',
         },
         scope: {
           type: 'string',
@@ -384,7 +434,7 @@ const TOOLS: Tool[] = [
   // ===== Batch Operation Tools =====
   {
     name: 'batch_create',
-    description: 'Batch create multiple nodes efficiently. Handles 1000+ operations without timeout.',
+    description: 'Batch create multiple nodes efficiently. Handles 1000+ operations without timeout. `operation.type` accepts alias formats: snake_case, camelCase, kebab-case, and uppercase.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -393,8 +443,14 @@ const TOOLS: Tool[] = [
           items: {
             type: 'object',
             properties: {
-              type: { type: 'string', enum: ['rectangle', 'frame', 'text', 'component'] },
-              params: { type: 'object' },
+              type: {
+                type: 'string',
+                description: 'Create type alias. Supported families: rectangle/frame/text/component/ellipse/line/polygon/star/vector. Examples: `create_frame`, `createFrame`, `frame`.',
+              },
+              params: {
+                type: 'object',
+                description: 'Node properties. Paint arrays (`fills`/`strokes`) support either hex strings (e.g. `#4A90E2`) or full Figma paint objects.',
+              },
             },
           },
         },
@@ -427,7 +483,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'batch_clone',
-    description: 'Clone a template node multiple times with optional position offset.',
+    description: 'Clone a template node multiple times with optional position offset. For large counts, IDs are optional and can be truncated to keep payloads small.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -436,6 +492,8 @@ const TOOLS: Tool[] = [
         offsetX: { type: 'number', default: 200 },
         offsetY: { type: 'number', default: 0 },
         gridColumns: { type: 'number', default: 5 },
+        includeIds: { type: 'boolean', default: false, description: 'Whether to include cloned node IDs in the response.' },
+        maxReturnedIds: { type: 'number', default: 100, minimum: 0, maximum: 5000, description: 'Maximum number of IDs returned when includeIds=true.' },
       },
       required: ['templateId', 'count'],
     },
@@ -546,7 +604,7 @@ const TOOLS: Tool[] = [
   // ===== Prototype System Tools =====
   {
     name: 'create_interaction',
-    description: 'Create a prototype interaction between two nodes. Accepts Node/Back/Close/URL actions and normalizes trigger/transition fields for Figma API compatibility.',
+    description: 'Create a prototype interaction between two nodes (strict mode). Source must support reactions (recommended FRAME/INSTANCE). Supported trigger types: ON_CLICK, ON_HOVER, ON_PRESS, AFTER_TIMEOUT, MOUSE_UP, MOUSE_DOWN, MOUSE_ENTER, MOUSE_LEAVE, ON_MEDIA_END. ON_DRAG/keyboard triggers are currently unsupported and are rejected explicitly. Supported action types: NODE, BACK, CLOSE, URL. For NODE actions, destinationId/navigation/transition must be valid. Unsupported types are rejected with explicit errors (no silent downgrade).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -555,16 +613,15 @@ const TOOLS: Tool[] = [
         trigger: {
           type: 'object',
           properties: {
-            type: { type: 'string', enum: ['ON_CLICK', 'ON_HOVER', 'ON_PRESS', 'ON_DRAG', 'AFTER_TIMEOUT', 'MOUSE_UP', 'MOUSE_DOWN', 'MOUSE_ENTER', 'MOUSE_LEAVE'] },
+            type: { type: 'string', enum: ['ON_CLICK', 'ON_HOVER', 'ON_PRESS', 'AFTER_TIMEOUT', 'MOUSE_UP', 'MOUSE_DOWN', 'MOUSE_ENTER', 'MOUSE_LEAVE', 'ON_MEDIA_END'] },
             delay: { type: 'number' },
             timeout: { type: 'number' },
-            deprecatedVersion: { type: 'boolean' },
           },
         },
         action: {
           type: 'object',
           properties: {
-            type: { type: 'string', enum: ['NODE', 'NAVIGATE', 'OVERLAY', 'SWAP', 'SCROLL_TO', 'CHANGE_TO', 'BACK', 'CLOSE', 'URL', 'OPEN_LINK'] },
+            type: { type: 'string', enum: ['NODE', 'BACK', 'CLOSE', 'URL', 'OPEN_LINK'] },
             navigation: { type: 'string', enum: ['NAVIGATE', 'OVERLAY', 'SWAP', 'SCROLL_TO', 'CHANGE_TO'] },
             destinationId: { type: 'string' },
             url: { type: 'string' },
@@ -691,7 +748,7 @@ const TOOLS: Tool[] = [
   // ===== Intelligence Tools =====
   {
     name: 'analyze_duplicates',
-    description: 'Analyze duplicate/similar elements and return consolidation opportunities. Scope can target current page, whole document, or explicit pageIds/pageNames.',
+    description: 'Analyze duplicate/similar elements and return consolidation opportunities. Scope can target current page, whole document, or explicit pageIds/pageNames. Supports output caps for large files.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -700,6 +757,9 @@ const TOOLS: Tool[] = [
         pageNames: { type: 'array', items: { type: 'string' }, description: 'Optional explicit page names to analyze (case-insensitive). If provided, takes precedence over scope.' },
         threshold: { type: 'number', default: 0.9 },
         minOccurrences: { type: 'number', default: 2 },
+        maxGroups: { type: 'number', default: 100, minimum: 1, maximum: 1000, description: 'Maximum duplicate groups returned.' },
+        maxNodesPerGroup: { type: 'number', default: 50, minimum: 1, maximum: 200, description: 'Maximum node references returned per duplicate group.' },
+        maxAnalyzedNodes: { type: 'number', default: 5000, minimum: 100, maximum: 50000, description: 'Hard limit for analyzed nodes to prevent timeouts on very large documents.' },
       },
     },
   },
@@ -743,7 +803,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'select_nodes',
-    description: 'Select nodes by IDs on canvas. Can optionally append to current selection and focus viewport.',
+    description: 'Select nodes by IDs on canvas. Selection is applied on the active page; cross-page IDs are reported in skippedCrossPageIds. Can optionally append to current selection and focus viewport.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -770,7 +830,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'move_nodes',
-    description: 'Move multiple nodes by delta offsets.',
+    description: 'Move multiple nodes by delta offsets. Operates by node ID globally (can move nodes on different pages in one call).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -796,7 +856,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'arrange_nodes',
-    description: 'Auto-arrange nodes into row/column/grid with optional collision avoidance, geometric quality checks, and optional before/after visual snapshots.',
+    description: 'Auto-arrange nodes into row/column/grid with optional collision avoidance, geometric quality checks, and optional before/after visual snapshots. Returns strict diagnostics via missingIds + missingDetails (reasons: not_found/not_positionable/missing_bounds/cross_page_filtered).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -862,12 +922,15 @@ const TOOLS: Tool[] = [
   // ===== Utility Tools =====
   {
     name: 'get_document_info',
-    description: 'Get full document structure with all pages and nodes.',
+    description: 'Get document/page structure with configurable output caps to avoid oversized payloads on large files.',
     inputSchema: {
       type: 'object',
       properties: {
         includeChildren: { type: 'boolean', default: true },
         maxDepth: { type: 'number', default: 10 },
+        maxPages: { type: 'number', default: 100, minimum: 1, maximum: 500, description: 'Maximum pages returned.' },
+        maxNodesPerPage: { type: 'number', default: 1200, minimum: 100, maximum: 10000, description: 'Maximum descendant nodes returned per page when includeChildren=true.' },
+        maxChildrenPerNode: { type: 'number', default: 200, minimum: 20, maximum: 1000, description: 'Maximum direct children returned for each node in tree output.' },
       },
     },
   },
@@ -881,6 +944,16 @@ const TOOLS: Tool[] = [
         includeChildren: { type: 'boolean', default: true },
       },
       required: ['nodeId'],
+    },
+  },
+  {
+    name: 'get_selection',
+    description: 'Get the current selection on the active page, including node metadata for each selected node',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        includeChildren: { type: 'boolean', default: false },
+      },
     },
   },
   {
@@ -1112,7 +1185,7 @@ const TOOLS: Tool[] = [
         width: { type: 'number' },
         height: { type: 'number' },
         name: { type: 'string' },
-        fills: { type: 'array' },
+        fills: { type: 'array', description: 'Paint array. Supports hex strings and paint objects.' },
         parentId: { type: 'string' },
       },
       required: ['x', 'y', 'width', 'height'],
@@ -1129,7 +1202,7 @@ const TOOLS: Tool[] = [
         width: { type: 'number' },
         height: { type: 'number' },
         strokeWeight: { type: 'number' },
-        strokes: { type: 'array' },
+        strokes: { type: 'array', description: 'Paint array. Supports hex strings and paint objects.' },
         name: { type: 'string' },
         parentId: { type: 'string' },
       },
@@ -1147,7 +1220,7 @@ const TOOLS: Tool[] = [
         width: { type: 'number' },
         height: { type: 'number' },
         pointCount: { type: 'number', default: 5 },
-        fills: { type: 'array' },
+        fills: { type: 'array', description: 'Paint array. Supports hex strings and paint objects.' },
         name: { type: 'string' },
         parentId: { type: 'string' },
       },
@@ -1166,7 +1239,7 @@ const TOOLS: Tool[] = [
         height: { type: 'number' },
         pointCount: { type: 'number', default: 5 },
         innerRadius: { type: 'number', default: 0.5 },
-        fills: { type: 'array' },
+        fills: { type: 'array', description: 'Paint array. Supports hex strings and paint objects.' },
         name: { type: 'string' },
         parentId: { type: 'string' },
       },
@@ -1175,7 +1248,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'create_vector',
-    description: 'Create a vector path. Supports vectorPaths as objects or SVG path strings.',
+    description: 'Create a vector path. Supports vector path aliases (`vectorPaths`/`vectorPath`/`path`/`svgPath`/`d`) with object or SVG-string inputs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1188,8 +1261,8 @@ const TOOLS: Tool[] = [
         path: { type: ['object', 'string'] as any, description: 'Alias of vectorPaths.' } as any,
         svgPath: { type: ['object', 'string'] as any, description: 'Alias of vectorPaths.' } as any,
         d: { type: ['object', 'string'] as any, description: 'Alias of vectorPaths.' } as any,
-        fills: { type: 'array' },
-        strokes: { type: 'array' },
+        fills: { type: 'array', description: 'Paint array. Supports hex strings and paint objects.' },
+        strokes: { type: 'array', description: 'Paint array. Supports hex strings and paint objects.' },
         strokeWeight: { type: 'number' },
         name: { type: 'string' },
         parentId: { type: 'string' },
@@ -1732,7 +1805,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'delete_page',
-    description: 'Delete a page.',
+    description: 'Delete a page. If the target is current page, the plugin switches to another page first. Cannot delete the last remaining page.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -2115,6 +2188,7 @@ class SuperchargedMCPServer {
   private batchExecutor: EnhancedBatchExecutor;
   private restBridge: FigmaRESTBridge | null = null;
   private httpServer: HttpServer | null = null;
+  private readonly connectionStatePath = path.join(os.tmpdir(), 'supercharged-figma-last-connection.json');
 
   constructor() {
     this.figmaConnection = new FigmaPluginConnection();
@@ -2123,7 +2197,7 @@ class SuperchargedMCPServer {
     this.server = new Server(
       {
         name: 'supercharged-figma-mcp',
-        version: '1.0.0',
+        version: MCP_SERVER_VERSION,
       },
       {
         capabilities: {
@@ -2157,6 +2231,84 @@ class SuperchargedMCPServer {
     });
   }
 
+  private classifyToolError(toolName: string, errorMessage: string): {
+    code: string;
+    retryable: boolean;
+    hint: string;
+  } {
+    const msg = errorMessage.toLowerCase();
+    const tool = toolName.toLowerCase();
+
+    if (msg.includes('not connected to figma') || msg.includes('channel code')) {
+      return {
+        code: 'E_NOT_CONNECTED',
+        retryable: true,
+        hint: 'Reconnect with connect_to_relay and ensure plugin status is connected.',
+      };
+    }
+
+    if (msg.includes('too many pending requests') || msg.includes('timeout') || msg.includes('timed out')) {
+      return {
+        code: 'E_TIMEOUT',
+        retryable: true,
+        hint: 'Reduce payload size or retry after clearing queue / reconnecting.',
+      };
+    }
+
+    if (msg.includes('invalid') || msg.includes('required') || msg.includes('unknown tool') || msg.includes('validation')) {
+      return {
+        code: 'E_INVALID_INPUT',
+        retryable: false,
+        hint: 'Check tool schema and required fields; do not pass unsupported keys.',
+      };
+    }
+
+    if (tool.includes('interaction') && (msg.includes('cross') || msg.includes('page') || msg.includes('reaction'))) {
+      return {
+        code: 'E_CROSS_PAGE_INTERACTION',
+        retryable: false,
+        hint: 'Source and destination must be valid nodes on an active accessible page.',
+      };
+    }
+
+    if (msg.includes('node not found') || msg.includes('missing')) {
+      return {
+        code: 'E_NODE_NOT_FOUND',
+        retryable: false,
+        hint: 'Verify node IDs still exist and are on loaded pages.',
+      };
+    }
+
+    if (tool.startsWith('rest_')) {
+      return {
+        code: 'E_REST_API',
+        retryable: true,
+        hint: 'Check access token, file/team IDs, and REST rate limits.',
+      };
+    }
+
+    return {
+      code: 'E_TOOL_EXECUTION',
+      retryable: false,
+      hint: 'Inspect plugin logs and retry with smaller, deterministic inputs.',
+    };
+  }
+
+  private formatToolError(toolName: string, errorMessage: string): string {
+    const classified = this.classifyToolError(toolName, errorMessage);
+    return JSON.stringify(
+      {
+        code: classified.code,
+        message: errorMessage,
+        tool: toolName,
+        retryable: classified.retryable,
+        hint: classified.hint,
+      },
+      null,
+      2
+    );
+  }
+
   private setupHandlers() {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -2166,6 +2318,11 @@ class SuperchargedMCPServer {
     // Handle tool calls
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
+
+      // Best-effort auto reconnect for non-system tools, useful when MCP runtime is recycled.
+      if (!name.startsWith('rest_') && name !== 'connect_to_relay' && name !== 'get_connection_status') {
+        await this.tryRestoreConnection();
+      }
 
       // Handle REST API bridge tools
       if (name.startsWith('rest_')) {
@@ -2200,6 +2357,7 @@ class SuperchargedMCPServer {
         
         try {
           await this.connectToRelay(channelCode, targetRelayUrl);
+          await this.persistConnectionState(targetRelayUrl, channelCode);
           return {
             content: [{ 
               type: 'text', 
@@ -2217,28 +2375,47 @@ class SuperchargedMCPServer {
         }
       }
       if (name === 'get_connection_status') {
+        await this.tryRestoreConnection();
         const connected = this.figmaConnection.isConnected();
         const figmaConnected = this.figmaConnection.isFigmaConnected();
         const channel = this.figmaConnection.getChannelId();
         const relayUrl = this.relayUrl;
         const ready = connected && figmaConnected;
+        const includeDebugRaw = (args as any)?.includeDebugEvents;
+        const includeDebugEvents = includeDebugRaw === true || includeDebugRaw === 'true' || includeDebugRaw === 1 || includeDebugRaw === '1';
+        const debugLimitRaw = Number((args as any)?.debugLimit ?? 20);
+        const debugLimit = Number.isFinite(debugLimitRaw)
+          ? Math.max(1, Math.min(200, Math.floor(debugLimitRaw)))
+          : 20;
+        const allEvents = this.figmaConnection.getDebugEvents();
+        const debugEvents = includeDebugEvents
+          ? allEvents.slice(Math.max(0, allEvents.length - debugLimit))
+          : [];
         const nextAction = ready
           ? 'Connected. You can run other MCP tools now.'
           : 'Not connected. Ask user to open Figma plugin, get Channel Code, then run connect_to_relay.';
         const connectTemplate = `connect_to_relay {"relayUrl":"${relayUrl}","channelCode":"<CHANNEL_FROM_FIGMA_PLUGIN>"}`;
 
+        const statusPayload: Record<string, any> = {
+          ready,
+          connectedToRelay: connected,
+          figmaHandshakeComplete: figmaConnected,
+          relayUrl,
+          channelCode: channel,
+          processId: process.pid,
+          debugEventCount: allEvents.length,
+          nextAction,
+          connectTemplate,
+        };
+        if (includeDebugEvents) {
+          statusPayload.debugEvents = debugEvents;
+          statusPayload.debugLimit = debugLimit;
+        }
+
         return {
           content: [{
             type: 'text',
-            text: JSON.stringify({
-              ready,
-              connectedToRelay: connected,
-              figmaHandshakeComplete: figmaConnected,
-              relayUrl,
-              channelCode: channel,
-              nextAction,
-              connectTemplate,
-            }, null, 2),
+            text: JSON.stringify(statusPayload, null, 2),
           }],
         };
       }
@@ -2290,7 +2467,7 @@ class SuperchargedMCPServer {
         };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        throw new Error(`Tool execution failed: ${errorMessage}`);
+        throw new Error(this.formatToolError(name, errorMessage));
       }
     });
   }
@@ -2333,7 +2510,8 @@ class SuperchargedMCPServer {
       };
     } catch (error) {
       this.progressManager.cancelOperation(operationId);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(this.formatToolError(name, errorMessage));
     }
   }
 
@@ -2447,7 +2625,7 @@ class SuperchargedMCPServer {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`REST API error: ${errorMessage}`);
+      throw new Error(this.formatToolError(name, `REST API error: ${errorMessage}`));
     }
   }
 
@@ -2592,6 +2770,40 @@ class SuperchargedMCPServer {
     const targetRelayUrl = relayUrl && relayUrl.trim() ? relayUrl.trim() : this.relayUrl;
     this.relayUrl = targetRelayUrl;
     await this.figmaConnection.connect(targetRelayUrl, channelCode);
+  }
+
+  private async persistConnectionState(relayUrl: string, channelCode: string): Promise<void> {
+    try {
+      await fs.writeFile(
+        this.connectionStatePath,
+        JSON.stringify({
+          relayUrl,
+          channelCode,
+          savedAt: new Date().toISOString(),
+        }),
+        'utf8'
+      );
+      console.log(chalk.gray(`[MCP pid=${process.pid}] persisted connection state -> ${this.connectionStatePath}`));
+    } catch {
+      // Best effort only.
+    }
+  }
+
+  private async tryRestoreConnection(): Promise<void> {
+    if (this.figmaConnection.isFigmaConnected()) return;
+
+    try {
+      const raw = await fs.readFile(this.connectionStatePath, 'utf8');
+      const state = JSON.parse(raw) as { relayUrl?: string; channelCode?: string };
+      const relayUrl = typeof state?.relayUrl === 'string' ? state.relayUrl : this.relayUrl;
+      const channelCode = typeof state?.channelCode === 'string' ? state.channelCode : '';
+      if (!channelCode) return;
+      console.log(chalk.gray(`[MCP pid=${process.pid}] restoring connection from state file: relay=${relayUrl} channel=${channelCode}`));
+      await this.connectToRelay(channelCode, relayUrl);
+      console.log(chalk.green(`[MCP pid=${process.pid}] restore connection success`));
+    } catch {
+      // Ignore restore failures; caller will surface normal connect error if needed.
+    }
   }
 }
 

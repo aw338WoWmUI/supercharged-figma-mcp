@@ -4,8 +4,8 @@ import assert from 'node:assert';
 import { TOOLS } from '../tools-data.js';
 
 describe('Tools Validation', () => {
-  it('should have 122 tools', () => {
-    assert.strictEqual(TOOLS.length, 122, 'Expected 122 tools');
+  it('should have 123 tools', () => {
+    assert.strictEqual(TOOLS.length, 123, 'Expected 123 tools');
   });
 
   it('should have unique tool names', () => {

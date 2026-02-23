@@ -56,6 +56,23 @@
       font-weight: 600;
       flex: 1;
     }
+
+    .lang-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 4px;
+    }
+
+    .lang-switch select {
+      background: var(--ui-bg-secondary);
+      color: var(--ui-text);
+      border: 1px solid var(--ui-border);
+      border-radius: 6px;
+      padding: 3px 6px;
+      font-size: 11px;
+      height: 24px;
+    }
     
     .status {
       width: 8px;
@@ -207,131 +224,55 @@
       filter: brightness(0.92);
     }
     
-    /* 进度条样式 */
-    .progress-container {
+    /* 统计卡片（高密度） */
+    .stats {
+      margin-bottom: 8px;
+    }
+
+    .stats-inline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
       background: var(--ui-bg-secondary);
       border: 1px solid var(--ui-border);
       border-radius: 8px;
-      padding: 8px;
-      margin-bottom: 8px;
-      display: none;
-    }
-    
-    .progress-container.active {
-      display: block;
-      animation: slideIn 0.3s ease;
-    }
-    
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .progress-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    
-    .progress-title {
-      font-size: 12px;
-      font-weight: 500;
-    }
-    
-    .progress-percentage {
-      font-size: 12px;
-      color: var(--ui-info);
-      font-weight: 600;
-    }
-    
-    .progress-bar-bg {
-      height: 5px;
-      background: var(--ui-bg-tertiary);
-      border-radius: 3px;
       overflow: hidden;
-      margin-bottom: 6px;
     }
-    
-    .progress-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--ui-brand), var(--ui-success));
-      border-radius: 3px;
-      transition: width 0.18s ease;
-      position: relative;
-    }
-    
-    .progress-bar-fill::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: linear-gradient(
-        90deg,
-        transparent,
-        rgba(255,255,255,0.3),
-        transparent
-      );
-      animation: shimmer 1.5s infinite;
-    }
-    
-    @keyframes shimmer {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
-    }
-    
-    .progress-details {
-      display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      color: var(--ui-text-secondary);
-    }
-    
-    .progress-stage {
-      color: var(--ui-text-secondary);
-    }
-    
-    .progress-eta {
-      color: var(--ui-info);
-    }
-    
-    /* 统计卡片 */
-    .stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px;
-      margin-bottom: 6px;
-    }
-    
-    .stat-item {
-      background: var(--ui-bg-secondary);
-      border: 1px solid var(--ui-border);
+
+    .stats-inline-item {
       padding: 7px 6px;
-      border-radius: 6px;
       text-align: center;
+      border-right: 1px solid var(--ui-border);
     }
-    
+
+    .stats-inline-item:last-child {
+      border-right: none;
+    }
+
     .stat-value {
       font-size: 16px;
-      font-weight: 600;
+      font-weight: 700;
       color: var(--ui-info);
+      line-height: 1.1;
     }
-    
+
     .stat-label {
       font-size: 10px;
       color: var(--ui-text-tertiary);
       margin-top: 2px;
-      text-transform: uppercase;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .stats-source {
-      margin-top: -2px;
+      margin-top: 2px;
       margin-bottom: 6px;
-      font-size: 10px;
-      color: var(--ui-text-tertiary);
-      text-align: center;
+      font-size: 11px;
+      color: var(--ui-text-secondary);
+      text-align: left;
+      line-height: 1.35;
     }
     
     /* 日志区域 */
@@ -562,8 +503,8 @@
     
     .operation-item {
       display: flex;
-      align-items: center;
-      gap: 6px;
+      flex-direction: column;
+      gap: 4px;
       padding: 4px 6px;
       border-radius: 6px;
       margin-bottom: 3px;
@@ -603,10 +544,50 @@
     .operation-name {
       flex: 1;
     }
+
+    .operation-main {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+    }
     
     .operation-meta {
       color: var(--ui-text-tertiary);
       font-size: 9px;
+      max-width: 48%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .operation-progress-wrap {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .operation-progress-bg {
+      flex: 1;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--ui-bg-tertiary);
+      overflow: hidden;
+    }
+
+    .operation-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--ui-brand), var(--ui-success));
+      transition: width 0.18s ease;
+    }
+
+    .operation-progress-label {
+      font-size: 9px;
+      color: var(--ui-text-tertiary);
+      min-width: 54px;
+      text-align: right;
     }
 
     .empty-note {
@@ -871,7 +852,13 @@
 <body>
   <div class="header">
     <div id="status" class="status"></div>
-    <h1>Supercharged AI Agent</h1>
+    <h1 id="title-main">Supercharged Figma AI</h1>
+    <div class="lang-switch">
+      <select id="lang-select" onchange="setLanguage(this.value)">
+        <option value="zh-CN">简体中文</option>
+        <option value="en">English</option>
+      </select>
+    </div>
     <span id="connection-status" style="font-size: 13px; color: var(--ui-text-tertiary);">离线</span>
   </div>
 
@@ -886,12 +873,12 @@
       <div id="relay-help-card" class="step-card">
         <div class="step-head">
           <span class="step-badge">Step 1</span>
-          <span class="step-title">启动 Relay Server</span>
+          <span id="step1-title" class="step-title">启动 Relay Server</span>
         </div>
         <div id="relay-help-hint" class="relay-help-hint">若连接失败，请先在项目根目录启动 relay server。</div>
         <div class="config-snippet-label">
-          <span>启动命令（项目根目录）</span>
-          <button class="secondary icon-btn" onclick="copyRelayStartCommand()" title="复制启动命令" aria-label="复制启动命令">⧉</button>
+          <span id="relay-start-label">启动命令（项目根目录）</span>
+          <button id="copy-relay-btn" class="secondary icon-btn" onclick="copyRelayStartCommand()" title="复制启动命令" aria-label="复制启动命令">⧉</button>
         </div>
         <div id="relay-start-viewer" class="config-snippet-code"></div>
       </div>
@@ -899,24 +886,29 @@
       <div id="mcp-config-card" class="step-card">
         <div class="step-head">
           <span class="step-badge">Step 2</span>
-          <span class="step-title">AGENT MCPSERVER 配置</span>
+          <span id="step2-title" class="step-title">AGENT MCPSERVER 配置</span>
         </div>
         <div class="config-snippet-card">
           <div class="fold-header" onclick="toggleMcpConfigCard()">
-            <div class="fold-title">展开/收起配置</div>
+            <div id="mcp-fold-title" class="fold-title">展开/收起配置</div>
             <div class="fold-arrow">▶</div>
           </div>
           <div class="fold-body">
             <div class="config-snippet-label">
-              <span>mcp.json 片段</span>
-              <button class="secondary icon-btn" onclick="copyMcpJsonConfig()" title="复制 mcp.json 配置" aria-label="复制 mcp.json 配置">⧉</button>
+              <span id="mcp-json-label">mcp.json 片段</span>
+              <button id="copy-mcp-json-btn" class="secondary icon-btn" onclick="copyMcpJsonConfig()" title="复制 mcp.json 配置" aria-label="复制 mcp.json 配置">⧉</button>
             </div>
             <div id="mcp-json-viewer" class="config-snippet-code"></div>
             <div class="config-snippet-label">
-              <span>Claude CLI 快捷命令</span>
-              <button class="secondary icon-btn" onclick="copyClaudeAddCommand()" title="复制 claude mcp add 命令" aria-label="复制 claude mcp add 命令">⧉</button>
+              <span id="claude-cli-label">Claude CLI 快捷命令</span>
+              <button id="copy-claude-btn" class="secondary icon-btn" onclick="copyClaudeAddCommand()" title="复制 claude mcp add 命令" aria-label="复制 claude mcp add 命令">⧉</button>
             </div>
             <div id="claude-add-viewer" class="config-snippet-code"></div>
+            <div class="config-snippet-label">
+              <span id="mcp-http-label">已部署 HTTP MCP 配置</span>
+              <button id="copy-mcp-http-btn" class="secondary icon-btn" onclick="copyHostedMcpJsonConfig()" title="复制 HTTP MCP 配置" aria-label="复制 HTTP MCP 配置">⧉</button>
+            </div>
+            <div id="mcp-http-viewer" class="config-snippet-code"></div>
           </div>
         </div>
       </div>
@@ -924,7 +916,7 @@
       <div class="step-card">
         <div class="step-head">
           <span class="step-badge">Step 3</span>
-          <span class="step-title">Connect to Relay Server</span>
+          <span id="step3-title" class="step-title">Connect to Relay Server</span>
         </div>
         <input type="text" id="relay-url" placeholder="ws://127.0.0.1:8888" value="ws://127.0.0.1:8888">
       </div>
@@ -932,7 +924,7 @@
       <div class="step-card">
         <div class="step-head">
           <span class="step-badge">Step 4</span>
-          <span class="step-title">Copy Channel Prompt to Agent</span>
+          <span id="step4-title" class="step-title">Copy Channel Prompt to Agent</span>
         </div>
         <div id="step4-waiting" class="relay-help-hint">先完成 Step 3 连接后，此处会显示 connect prompt 与 Channel Code。</div>
         <div id="connect-prompt-row" class="prompt-row hidden">
@@ -940,12 +932,12 @@
           <button id="copy-prompt-btn" class="secondary icon-btn" onclick="copyConnectPrompt()" title="复制 Prompt" aria-label="复制 Prompt">⧉</button>
         </div>
         <div id="channel-section" class="hidden channel-card" style="padding: 10px; background: var(--ui-bg-secondary); border-radius: 8px; border: 1px solid var(--ui-border);">
-          <div style="font-size: 12px; color: var(--ui-text-tertiary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Channel Code</div>
+          <div id="channel-code-title" style="font-size: 12px; color: var(--ui-text-tertiary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Channel Code</div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <div id="channel-code" style="font-size: 32px; font-weight: 700; color: var(--ui-info); font-family: monospace; letter-spacing: 1px;">--</div>
-            <button onclick="copyChannelCode()" style="width: auto; padding: 6px 11px; font-size: 13px; margin: 0;">复制</button>
+            <button id="copy-channel-btn" onclick="copyChannelCode()" style="width: auto; padding: 6px 11px; font-size: 13px; margin: 0;">复制</button>
           </div>
-          <div style="font-size: 12px; color: var(--ui-text-tertiary); margin-top: 6px;">在 Cursor/Claude 中输入此 Code 连接</div>
+          <div id="channel-help-text" style="font-size: 12px; color: var(--ui-text-tertiary); margin-top: 6px;">在 Cursor/Claude 中输入此 Code 连接</div>
         </div>
       </div>
     </div>
@@ -957,39 +949,37 @@
   </div>
 
   <div id="panel-status" class="main-tab-panel section hidden">
-    <div id="progress-container" class="progress-container">
-      <div class="progress-header">
-        <span id="progress-title" class="progress-title">处理中...</span>
-        <span id="progress-percentage" class="progress-percentage">0%</span>
-      </div>
-      <div class="progress-bar-bg">
-        <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
-      </div>
-      <div class="progress-details">
-        <span id="progress-stage" class="progress-stage">准备</span>
-        <span id="progress-eta" class="progress-eta">计算中...</span>
-      </div>
-    </div>
-
     <div class="stats">
-      <div class="stat-item">
-        <div class="stat-value" id="tool-count">0</div>
-        <div class="stat-label">可用工具</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="active-ops">0</div>
-        <div class="stat-label">运行中操作</div>
+      <div class="stats-inline">
+        <div class="stats-inline-item">
+          <div class="stat-value" id="active-ops">0</div>
+          <div id="stat-running-label" class="stat-label">运行中</div>
+        </div>
+        <div class="stats-inline-item">
+          <div class="stat-value" id="completed-ops">0</div>
+          <div id="stat-completed-label" class="stat-label">已完成</div>
+        </div>
+        <div class="stats-inline-item">
+          <div class="stat-value" id="failed-ops">0</div>
+          <div id="stat-failed-label" class="stat-label">失败</div>
+        </div>
+        <div class="stats-inline-item">
+          <div class="stat-value" id="total-ops">0</div>
+          <div id="stat-total-label" class="stat-label">总操作数</div>
+        </div>
       </div>
     </div>
-    <div id="stats-source" class="stats-source">统计来源：runtime（尚未收到工具清单）</div>
+    <div id="status-runtime" class="stats-source">会话时长：--</div>
+    <div id="status-last" class="stats-source">最近活动：--</div>
+    <div id="status-current" class="stats-source">当前运行：暂无</div>
 
     <div id="operations-container" class="section">
-      <div class="section-title">活动操作</div>
+      <div id="operations-title" class="section-title">运行队列</div>
       <div class="operations-toolbar">
         <span id="operations-summary">0 组</span>
         <div class="operations-actions">
-          <span class="operations-action" onclick="toggleAllOperationGroups(true)">展开</span>
-          <span class="operations-action" onclick="toggleAllOperationGroups(false)">收起</span>
+          <span id="operations-expand" class="operations-action" onclick="toggleAllOperationGroups(true)">展开</span>
+          <span id="operations-collapse" class="operations-action" onclick="toggleAllOperationGroups(false)">收起</span>
         </div>
       </div>
       <div id="operations-list" class="operations-list"></div>
@@ -999,11 +989,11 @@
   <div id="panel-logs" class="main-tab-panel section hidden">
     <div class="log-container">
       <div class="log-header">
-        <span class="log-title">活动日志</span>
+        <span id="log-title" class="log-title">活动日志</span>
         <div class="log-actions">
-          <span class="log-clear" onclick="toggleAllLogs(true)">展开</span>
-          <span class="log-clear" onclick="toggleAllLogs(false)">收起</span>
-          <span class="log-clear" onclick="clearLog()">清除</span>
+          <span id="log-expand" class="log-clear" onclick="toggleAllLogs(true)">展开</span>
+          <span id="log-collapse" class="log-clear" onclick="toggleAllLogs(false)">收起</span>
+          <span id="log-clear" class="log-clear" onclick="clearLog()">清除</span>
         </div>
       </div>
       <div class="log" id="log"></div>
@@ -1023,6 +1013,7 @@
     const relayStartViewerEl = document.getElementById('relay-start-viewer');
     const mcpJsonViewerEl = document.getElementById('mcp-json-viewer');
     const claudeAddViewerEl = document.getElementById('claude-add-viewer');
+    const mcpHttpViewerEl = document.getElementById('mcp-http-viewer');
     const mcpConfigCardEl = document.getElementById('mcp-config-card');
     const channelSection = document.getElementById('channel-section');
     const channelCodeEl = document.getElementById('channel-code');
@@ -1033,31 +1024,363 @@
     const panelStatusEl = document.getElementById('panel-status');
     const panelLogsEl = document.getElementById('panel-logs');
     const logEl = document.getElementById('log');
-    const progressContainer = document.getElementById('progress-container');
-    const progressBarFill = document.getElementById('progress-bar-fill');
-    const progressPercentage = document.getElementById('progress-percentage');
-    const progressTitle = document.getElementById('progress-title');
-    const progressStage = document.getElementById('progress-stage');
-    const progressEta = document.getElementById('progress-eta');
     const operationsList = document.getElementById('operations-list');
     const operationsSummaryEl = document.getElementById('operations-summary');
     const activeOpsEl = document.getElementById('active-ops');
-    const toolCountEl = document.getElementById('tool-count');
-    const statsSourceEl = document.getElementById('stats-source');
+    const completedOpsEl = document.getElementById('completed-ops');
+    const failedOpsEl = document.getElementById('failed-ops');
+    const totalOpsEl = document.getElementById('total-ops');
+    const statusRuntimeEl = document.getElementById('status-runtime');
+    const statusLastEl = document.getElementById('status-last');
+    const statusCurrentEl = document.getElementById('status-current');
+    const langSelectEl = document.getElementById('lang-select');
+
+    const I18N = {
+      'zh-CN': {
+        titleMain: 'Supercharged Figma AI',
+        tabs: { config: '配置', status: '状态', logs: '日志' },
+        status: { connected: '已连接', offline: '离线', waiting: '等待 Channel...' },
+        step1Title: '启动 Relay Server',
+        step2Title: 'AGENT MCPSERVER 配置',
+        step3Title: '连接 Relay Server',
+        step4Title: '复制连接提示给 Agent',
+        relayHint: '若连接失败，请先在项目根目录启动 relay server。',
+        relayStartLabel: '启动命令（项目根目录）',
+        copyRelayStartTitle: '复制启动命令',
+        mcpFoldTitle: '展开/收起配置',
+        mcpJsonLabel: 'mcp.json 片段',
+        copyMcpJsonTitle: '复制 mcp.json 配置',
+        claudeCliLabel: 'Claude CLI 快捷命令',
+        copyClaudeCliTitle: '复制 claude mcp add 命令',
+        mcpHttpLabel: '已部署 HTTP MCP 配置',
+        copyMcpHttpTitle: '复制 HTTP MCP 配置',
+        step4Waiting: '先完成 Step 3 连接后，此处会显示 connect prompt 与 Channel Code。',
+        copyPromptTitle: '复制 Prompt',
+        channelCode: 'Channel Code',
+        copy: '复制',
+        channelHelp: '在 Cursor/Claude 中输入此 Code 连接',
+        connectBtn: '连接 Relay Server',
+        connectingBtn: '连接中...',
+        disconnectBtn: '断开连接',
+        statRunning: '运行中',
+        statCompleted: '已完成',
+        statFailed: '失败',
+        statTotal: '总操作数',
+        operationsTitle: '运行队列',
+        statusRuntime: '会话时长：{value}',
+        statusLastActivity: '最近活动：{value}',
+        statusCurrentRunning: '当前运行：{value}',
+        noCurrentRunning: '暂无',
+        activityStart: '{name} 开始',
+        activityDone: '{name} 完成',
+        activityFailed: '{name} 失败',
+        logsTitle: '活动日志',
+        expand: '展开',
+        collapse: '收起',
+        clear: '清除',
+        progressProcessing: '处理中...',
+        progressReady: '准备',
+        progressCalculating: '计算中...',
+        progressExecuting: '执行中',
+        progressCompleted: '完成',
+        progressFailed: '失败',
+        progressStalled: '进度长时间未更新，自动结束当前进度显示',
+        currentOperation: '当前操作',
+        etaSeconds: '预计剩余 {seconds} 秒',
+        operationProcessing: '处理中...',
+        statsCatalog: '统计来源：catalog（服务端 get_tools）',
+        statsRuntime: '统计来源：runtime（尚未收到工具清单）',
+        logCleared: '日志已清除',
+        noOperations: '暂无活动操作',
+        enterRelay: '请输入 Relay Server 地址',
+        connectingRelayLog: '正在连接 Relay Server',
+        connectedRelayWaiting: '已连接到 Relay Server，等待 Channel...',
+        relayDisconnected: '与 Relay Server 断开连接',
+        relayConnectFailed: '连接失败，请检查 Relay Server 地址',
+        relayConnectException: '连接异常。请先启动 Relay Server，再检查地址与端口。',
+        relayDisconnectedHint: '连接已断开。请确认 Relay Server 仍在运行。',
+        relayFailedHint: '连接失败。请确认你已在项目根目录运行 relay server。',
+        relayDefaultHint: '若连接失败，请先在项目根目录启动 relay server。',
+        disconnectedDone: '已断开连接',
+        connectedMcp: '已连接到 MCP Server',
+        noChannelCopy: '尚未获取 Channel Code，无法复制',
+        noChannelPromptCopy: '尚未获取 Channel Code，无法复制 Prompt',
+        waitingConnect: '等待连接...',
+        cannotRelayResponse: '无法回传响应：Relay 未连接',
+        connectionErrorPrefix: '错误',
+        groupsUnit: '组',
+        itemsUnit: '条',
+        copyEmpty: '为空，无法复制',
+        copyDone: '已复制',
+        copyDoneFallback: '已复制（fallback）',
+        copyFailed: '自动复制失败，请手动复制',
+        relayStartCommandLabel: 'relay 启动命令',
+        mcpJsonConfigLabel: 'mcp.json 配置',
+        claudeAddCommandLabel: 'claude mcp add 命令',
+        hostedMcpConfigLabel: 'HTTP MCP 配置',
+        contentLabel: '内容',
+      },
+      en: {
+        titleMain: 'Supercharged Figma AI',
+        tabs: { config: 'Config', status: 'Status', logs: 'Logs' },
+        status: { connected: 'Connected', offline: 'Offline', waiting: 'Waiting channel...' },
+        step1Title: 'Start Relay Server',
+        step2Title: 'AGENT MCPSERVER Config',
+        step3Title: 'Connect to Relay Server',
+        step4Title: 'Copy Channel Prompt to Agent',
+        relayHint: 'If connection fails, start relay server in project root first.',
+        relayStartLabel: 'Start command (project root)',
+        copyRelayStartTitle: 'Copy start command',
+        mcpFoldTitle: 'Expand/Collapse config',
+        mcpJsonLabel: 'mcp.json snippet',
+        copyMcpJsonTitle: 'Copy mcp.json config',
+        claudeCliLabel: 'Claude CLI command',
+        copyClaudeCliTitle: 'Copy claude mcp add command',
+        mcpHttpLabel: 'Hosted HTTP MCP config',
+        copyMcpHttpTitle: 'Copy HTTP MCP config',
+        step4Waiting: 'Complete Step 3 first, then channel prompt and code will appear here.',
+        copyPromptTitle: 'Copy prompt',
+        channelCode: 'Channel Code',
+        copy: 'Copy',
+        channelHelp: 'Paste this code into Cursor/Claude to connect',
+        connectBtn: 'Connect Relay Server',
+        connectingBtn: 'Connecting...',
+        disconnectBtn: 'Disconnect',
+        statRunning: 'Running',
+        statCompleted: 'Completed',
+        statFailed: 'Failed',
+        statTotal: 'Total Ops',
+        operationsTitle: 'Execution Queue',
+        statusRuntime: 'Session uptime: {value}',
+        statusLastActivity: 'Last activity: {value}',
+        statusCurrentRunning: 'Now running: {value}',
+        noCurrentRunning: 'None',
+        activityStart: '{name} started',
+        activityDone: '{name} done',
+        activityFailed: '{name} failed',
+        logsTitle: 'Activity Logs',
+        expand: 'Expand',
+        collapse: 'Collapse',
+        clear: 'Clear',
+        progressProcessing: 'Processing...',
+        progressReady: 'Ready',
+        progressCalculating: 'Calculating...',
+        progressExecuting: 'Running',
+        progressCompleted: 'Done',
+        progressFailed: 'Failed',
+        progressStalled: 'Progress stalled too long, auto-finishing progress display',
+        currentOperation: 'Current operation',
+        etaSeconds: '{seconds}s remaining',
+        operationProcessing: 'Processing...',
+        statsCatalog: 'Stats source: catalog (server get_tools)',
+        statsRuntime: 'Stats source: runtime (catalog not received yet)',
+        logCleared: 'Logs cleared',
+        noOperations: 'No active operations',
+        enterRelay: 'Please enter Relay Server URL',
+        connectingRelayLog: 'Connecting to Relay Server',
+        connectedRelayWaiting: 'Connected to Relay Server, waiting channel...',
+        relayDisconnected: 'Disconnected from Relay Server',
+        relayConnectFailed: 'Connection failed, check Relay Server URL',
+        relayConnectException: 'Connection error. Start Relay Server first, then verify URL/port.',
+        relayDisconnectedHint: 'Connection closed. Confirm Relay Server is still running.',
+        relayFailedHint: 'Connection failed. Start relay server in project root first.',
+        relayDefaultHint: 'If connection fails, start relay server in project root first.',
+        disconnectedDone: 'Disconnected',
+        connectedMcp: 'Connected to MCP Server',
+        noChannelCopy: 'Channel code not available yet',
+        noChannelPromptCopy: 'Channel code not available yet',
+        waitingConnect: 'Waiting for connection...',
+        cannotRelayResponse: 'Cannot forward response: relay not connected',
+        connectionErrorPrefix: 'Error',
+        groupsUnit: 'groups',
+        itemsUnit: 'items',
+        copyEmpty: 'is empty, cannot copy',
+        copyDone: 'copied',
+        copyDoneFallback: 'copied (fallback)',
+        copyFailed: 'Auto-copy failed, please copy manually',
+        relayStartCommandLabel: 'relay start command',
+        mcpJsonConfigLabel: 'mcp.json config',
+        claudeAddCommandLabel: 'claude mcp add command',
+        hostedMcpConfigLabel: 'HTTP MCP config',
+        contentLabel: 'content',
+      },
+    };
+
+    let currentLang = 'zh-CN';
+    let inMemoryLang = null;
+
+    function t(path, fallback = '') {
+      const dict = I18N[currentLang] || I18N['zh-CN'];
+      const parts = String(path).split('.');
+      let value = dict;
+      for (const p of parts) {
+        value = value?.[p];
+      }
+      return value ?? fallback ?? path;
+    }
+
+    function setText(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    function setAttr(id, attr, value) {
+      const el = document.getElementById(id);
+      if (el) el.setAttribute(attr, value);
+    }
+
+    function applyI18n() {
+      setText('title-main', t('titleMain'));
+      setText('tab-config', t('tabs.config'));
+      setText('tab-status', t('tabs.status'));
+      setText('tab-logs', t('tabs.logs'));
+      setText('step1-title', t('step1Title'));
+      setText('step2-title', t('step2Title'));
+      setText('step3-title', t('step3Title'));
+      setText('step4-title', t('step4Title'));
+      setText('relay-help-hint', t('relayHint'));
+      setText('relay-start-label', t('relayStartLabel'));
+      setText('mcp-fold-title', t('mcpFoldTitle'));
+      setText('mcp-json-label', t('mcpJsonLabel'));
+      setText('claude-cli-label', t('claudeCliLabel'));
+      setText('mcp-http-label', t('mcpHttpLabel'));
+      setText('step4-waiting', t('step4Waiting'));
+      setText('channel-code-title', t('channelCode'));
+      setText('copy-channel-btn', t('copy'));
+      setText('channel-help-text', t('channelHelp'));
+      setText('connect-btn', t('connectBtn'));
+      setText('disconnect-btn', t('disconnectBtn'));
+      setText('stat-running-label', t('statRunning'));
+      setText('stat-completed-label', t('statCompleted'));
+      setText('stat-failed-label', t('statFailed'));
+      setText('stat-total-label', t('statTotal'));
+      setText('operations-title', t('operationsTitle'));
+      setText('operations-expand', t('expand'));
+      setText('operations-collapse', t('collapse'));
+      setText('log-title', t('logsTitle'));
+      setText('log-expand', t('expand'));
+      setText('log-collapse', t('collapse'));
+      setText('log-clear', t('clear'));
+      setAttr('copy-relay-btn', 'title', t('copyRelayStartTitle'));
+      setAttr('copy-relay-btn', 'aria-label', t('copyRelayStartTitle'));
+      setAttr('copy-mcp-json-btn', 'title', t('copyMcpJsonTitle'));
+      setAttr('copy-mcp-json-btn', 'aria-label', t('copyMcpJsonTitle'));
+      setAttr('copy-claude-btn', 'title', t('copyClaudeCliTitle'));
+      setAttr('copy-claude-btn', 'aria-label', t('copyClaudeCliTitle'));
+      setAttr('copy-mcp-http-btn', 'title', t('copyMcpHttpTitle'));
+      setAttr('copy-mcp-http-btn', 'aria-label', t('copyMcpHttpTitle'));
+      setAttr('copy-prompt-btn', 'title', t('copyPromptTitle'));
+      setAttr('copy-prompt-btn', 'aria-label', t('copyPromptTitle'));
+      refreshConnectionStatusLabel();
+      renderMcpSetupHints();
+      refreshStatusPanel();
+      updateOperationsList();
+    }
+
+    function safeGetStoredLang() {
+      try {
+        return localStorage.getItem('supercharged-figma-lang');
+      } catch (_) {
+        return inMemoryLang;
+      }
+    }
+
+    function safeSetStoredLang(lang) {
+      inMemoryLang = lang;
+      try {
+        localStorage.setItem('supercharged-figma-lang', lang);
+      } catch (_) {
+        // data: URL environments may block storage; memory fallback is enough.
+      }
+    }
+
+    function detectDefaultLanguage() {
+      const saved = safeGetStoredLang();
+      if (saved && (saved === 'zh-CN' || saved === 'en')) return saved;
+      const docLang = String(document.documentElement.lang || '').toLowerCase();
+      if (docLang.startsWith('zh')) return 'zh-CN';
+      const navLang = String(navigator.language || '').toLowerCase();
+      return navLang.startsWith('zh') ? 'zh-CN' : 'en';
+    }
+
+    function setLanguage(lang) {
+      currentLang = lang === 'en' ? 'en' : 'zh-CN';
+      if (langSelectEl) langSelectEl.value = currentLang;
+      safeSetStoredLang(currentLang);
+      applyI18n();
+    }
+
+    function refreshConnectionStatusLabel() {
+      if (!connectionStatusEl || !statusEl) return;
+      const state = connectionState || (statusEl.classList.contains('connected')
+        ? 'connected'
+        : statusEl.classList.contains('processing')
+          ? 'waiting'
+          : 'offline');
+      if (state === 'connected') {
+        connectionStatusEl.textContent = t('status.connected');
+        connectionStatusEl.style.color = 'var(--ui-success)';
+        return;
+      }
+      if (state === 'waiting') {
+        connectionStatusEl.textContent = t('status.waiting');
+        connectionStatusEl.style.color = 'var(--ui-warning)';
+        return;
+      }
+      connectionStatusEl.textContent = t('status.offline');
+      connectionStatusEl.style.color = 'var(--ui-text-tertiary)';
+    }
 
     const operations = new Map();
     const collapsedOperationGroups = new Set();
     const seenTools = new Set();
     let availableToolCount = 0;
+    let sessionConnectedAt = 0;
+    let totalOpsStarted = 0;
+    let totalOpsCompleted = 0;
+    let totalOpsFailed = 0;
+    let lastActivityLabel = '--';
+    let runtimeTimer = null;
     let ws = null;
     let currentChannelCode = null;
+    let currentBridgeSessionId = null;
+    let bridgeSessionCounter = 0;
     let currentProgressValue = 0;
     let lastProgressAt = 0;
     let progressAutoHideTimer = null;
     let progressStallTimer = null;
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_DELAY_MS = 5000;
     const MAX_LOG_ENTRIES = 300;
     let currentMainTab = 'config';
     let manualDisconnecting = false;
+    let connectionState = 'offline'; // offline | waiting | connected
+
+    function nextBridgeSessionId() {
+      bridgeSessionCounter += 1;
+      return `${Date.now()}-${bridgeSessionCounter}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function clearReconnectTimer() {
+      if (!reconnectTimer) return;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+
+    function scheduleReconnect() {
+      if (manualDisconnecting) return;
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+      clearReconnectTimer();
+      reconnectAttempts += 1;
+      const delay = Math.min(500 * (2 ** (reconnectAttempts - 1)), MAX_RECONNECT_DELAY_MS);
+      log(`relay reconnect scheduled in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts})`, 'warning');
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (manualDisconnecting) return;
+        connect();
+      }, delay);
+    }
 
     function formatTime(date) {
       return date.toTimeString().slice(0, 8);
@@ -1177,17 +1500,38 @@
 
     function clearLog() {
       logEl.innerHTML = '';
-      log('日志已清除', 'info');
+      log(t('logCleared'), 'info');
     }
 
-    function refreshToolStats() {
-      const hasCatalog = availableToolCount > 0;
-      const effectiveCount = hasCatalog ? availableToolCount : seenTools.size;
-      toolCountEl.textContent = String(effectiveCount);
-      if (statsSourceEl) {
-        statsSourceEl.textContent = hasCatalog
-          ? '统计来源：catalog（服务端 get_tools）'
-          : '统计来源：runtime（尚未收到工具清单）';
+    function formatDuration(ms) {
+      if (!Number.isFinite(ms) || ms <= 0) return '00:00:00';
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600).toString().padStart(2, '0');
+      const m = Math.floor((totalSec % 3600) / 60).toString().padStart(2, '0');
+      const s = (totalSec % 60).toString().padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
+
+    function refreshStatusPanel() {
+      if (activeOpsEl) activeOpsEl.textContent = String(operations.size);
+      if (completedOpsEl) completedOpsEl.textContent = String(totalOpsCompleted);
+      if (failedOpsEl) failedOpsEl.textContent = String(totalOpsFailed);
+      if (totalOpsEl) totalOpsEl.textContent = String(totalOpsStarted);
+
+      const uptime = sessionConnectedAt > 0 ? formatDuration(Date.now() - sessionConnectedAt) : '--';
+      if (statusRuntimeEl) {
+        statusRuntimeEl.textContent = t('statusRuntime').replace('{value}', uptime);
+      }
+      if (statusLastEl) {
+        statusLastEl.textContent = t('statusLastActivity').replace('{value}', lastActivityLabel || '--');
+      }
+      const runningNames = Array.from(operations.values())
+        .filter((op) => op.status === 'running' || op.status === 'pending')
+        .map((op) => op.name)
+        .slice(0, 3);
+      const runningLabel = runningNames.length > 0 ? runningNames.join(', ') : t('noCurrentRunning');
+      if (statusCurrentEl) {
+        statusCurrentEl.textContent = t('statusCurrentRunning').replace('{value}', runningLabel);
       }
     }
 
@@ -1215,7 +1559,7 @@
     }
 
     function normalizeProgress(data) {
-      const operationName = data.operationName || data.name || '处理中...';
+      const operationName = data.operationName || data.name || t('operationProcessing');
       const current = Number.isFinite(data.current) ? data.current : undefined;
       const total = Number.isFinite(data.total) ? data.total : undefined;
       let percentage = Number.isFinite(data.percentage) ? data.percentage : undefined;
@@ -1247,25 +1591,20 @@
     function scheduleProgressStallWatch() {
       if (progressStallTimer) clearTimeout(progressStallTimer);
       progressStallTimer = setTimeout(() => {
-        if (!progressContainer.classList.contains('active')) return;
+        if (operations.size === 0) return;
         const idleMs = Date.now() - lastProgressAt;
         if (idleMs >= 15000) {
-          log('进度长时间未更新，自动结束当前进度显示', 'warning');
-          completeProgress({ name: progressTitle.textContent || '当前操作', duration: 0 }, true);
+          log(t('progressStalled'), 'warning');
+          completeProgress({ name: t('currentOperation'), duration: 0 }, true);
         }
       }, 16000);
     }
 
     function startPseudoProgress(operationName) {
-      const name = normalizeToolName(operationName || 'operation');
-      progressContainer.classList.add('active');
-      progressTitle.textContent = name;
-      progressStage.textContent = '执行中';
-      progressEta.textContent = '';
       currentProgressValue = Math.max(currentProgressValue, 6);
-      progressBarFill.style.width = `${currentProgressValue}%`;
-      progressPercentage.textContent = `${currentProgressValue}%`;
       statusEl.classList.add('processing');
+      if (connectionState !== 'connected') connectionState = 'waiting';
+      refreshConnectionStatusLabel();
       lastProgressAt = Date.now();
       scheduleProgressStallWatch();
     }
@@ -1281,14 +1620,29 @@
 
       lastProgressAt = Date.now();
       currentProgressValue = percentage;
-      progressContainer.classList.add('active');
-      progressBarFill.style.width = `${percentage}%`;
-      progressPercentage.textContent = `${percentage}%`;
-      progressTitle.textContent = operationName || '处理中...';
-      progressStage.textContent = stage || '';
-      progressEta.textContent = eta ? `预计剩余 ${eta} 秒` : '计算中...';
       statusEl.classList.add('processing');
+      if (connectionState !== 'connected') connectionState = 'waiting';
+      refreshConnectionStatusLabel();
       scheduleProgressStallWatch();
+
+      const opId = data?.operationId;
+      let targetOp = null;
+      if (opId && operations.has(opId)) {
+        targetOp = operations.get(opId);
+      } else {
+        const normName = normalizeToolName(operationName);
+        targetOp = Array.from(operations.values())
+          .find((op) => (op.status === 'running' || op.status === 'pending') && normalizeToolName(op.name) === normName)
+          || Array.from(operations.values())
+            .find((op) => op.status === 'running' || op.status === 'pending')
+          || null;
+      }
+      if (targetOp) {
+        targetOp.progress = percentage;
+        targetOp.progressStage = stage || '';
+        targetOp.progressEta = eta;
+      }
+      updateOperationsList();
 
       if (message || percentage === 0 || percentage === 100 || percentage % 10 === 0) {
         const detail = [stage, message].filter(Boolean).join(' | ');
@@ -1305,27 +1659,44 @@
       }
 
       currentProgressValue = 100;
-      progressBarFill.style.width = '100%';
-      progressPercentage.textContent = '100%';
-      progressStage.textContent = '完成';
-      progressEta.textContent = '';
+      const normalizedName = normalizeToolName(name || 'operation');
+      const candidate = Array.from(operations.values())
+        .find((op) => normalizeToolName(op.name) === normalizedName && (op.status === 'running' || op.status === 'pending'))
+        || Array.from(operations.values()).find((op) => op.status === 'running' || op.status === 'pending');
+      if (candidate) {
+        candidate.progress = 100;
+        candidate.progressStage = t('progressCompleted');
+        candidate.progressEta = null;
+      }
 
       progressAutoHideTimer = setTimeout(() => {
-        progressContainer.classList.remove('active');
         statusEl.classList.remove('processing');
+        connectionState = currentChannelCode ? 'connected' : 'offline';
+        refreshConnectionStatusLabel();
         currentProgressValue = 0;
-        progressBarFill.style.width = '0%';
-        progressPercentage.textContent = '0%';
         if (!silent) {
           log(normalizeToolName(name || 'operation'), 'success');
         }
+        updateOperationsList();
       }, 700);
     }
 
     function addOperation(opId, name, meta = '') {
-      operations.set(opId, { id: opId, name, status: 'pending', meta, createdAt: Date.now() });
+      operations.set(opId, {
+        id: opId,
+        name,
+        status: 'pending',
+        meta,
+        createdAt: Date.now(),
+        // Initialize minimal progress so queue can render per-op tracking immediately.
+        progress: 2,
+        progressStage: t('progressReady'),
+        progressEta: null,
+      });
       seenTools.add(name);
-      refreshToolStats();
+      totalOpsStarted += 1;
+      lastActivityLabel = t('activityStart').replace('{name}', name);
+      refreshStatusPanel();
       if (operations.size === 1) {
         startPseudoProgress(name);
       }
@@ -1337,6 +1708,19 @@
       if (op) {
         op.status = status;
         if (meta !== undefined) op.meta = meta;
+        if (status === 'running') {
+          if (!Number.isFinite(op.progress)) op.progress = 6;
+          else op.progress = Math.max(6, Math.min(96, Number(op.progress)));
+          if (!op.progressStage) op.progressStage = t('progressProcessing');
+        } else if (status === 'completed') {
+          op.progress = 100;
+          op.progressStage = t('progressCompleted');
+          op.progressEta = null;
+        } else if (status === 'error') {
+          op.progress = Number.isFinite(op.progress) ? Number(op.progress) : 0;
+          op.progressStage = t('progressFailed');
+          op.progressEta = null;
+        }
         op.updatedAt = Date.now();
         updateOperationsList();
       }
@@ -1385,18 +1769,19 @@
     }
 
     function updateOperationsList() {
-      activeOpsEl.textContent = operations.size;
+      if (activeOpsEl) activeOpsEl.textContent = String(operations.size);
       const groups = getGroupedOperations();
       if (operationsSummaryEl) {
-        operationsSummaryEl.textContent = `${groups.length} 组 / ${operations.size} 条`;
+        operationsSummaryEl.textContent = `${groups.length} ${t('groupsUnit')} / ${operations.size} ${t('itemsUnit')}`;
       }
 
       operationsList.innerHTML = '';
       if (groups.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'empty-note';
-        empty.textContent = '暂无活动操作';
+        empty.textContent = t('noOperations');
         operationsList.appendChild(empty);
+        refreshStatusPanel();
         return;
       }
 
@@ -1423,10 +1808,22 @@
           .forEach((op) => {
             const item = document.createElement('div');
             item.className = 'operation-item';
+            const hasProgress = Number.isFinite(op.progress);
+            const stageText = op.progressStage || '';
+            const etaText = Number.isFinite(op.progressEta)
+              ? t('etaSeconds').replace('{seconds}', String(op.progressEta))
+              : '';
             item.innerHTML = `
-              <div class="operation-status ${op.status}"></div>
-              <span class="operation-name">${op.id ? op.id.slice(0, 8) : 'op'}</span>
-              <span class="operation-meta">${op.meta || ''}</span>
+              <div class="operation-main">
+                <div class="operation-status ${op.status}"></div>
+                <span class="operation-name">${op.id ? op.id.slice(0, 8) : 'op'}</span>
+                <span class="operation-meta">${op.meta || ''}</span>
+              </div>
+              ${hasProgress ? `
+              <div class="operation-progress-wrap">
+                <div class="operation-progress-bg"><div class="operation-progress-fill" style="width:${Math.max(0, Math.min(100, Number(op.progress)))}%"></div></div>
+                <div class="operation-progress-label">${Math.round(Number(op.progress))}%${stageText ? ` · ${stageText}` : ''}${etaText ? ` · ${etaText}` : ''}</div>
+              </div>` : ''}
             `;
             items.appendChild(item);
           });
@@ -1436,6 +1833,7 @@
         fragment.appendChild(groupEl);
       }
       operationsList.appendChild(fragment);
+      refreshStatusPanel();
     }
 
     function settleOperationFromResponse(payload) {
@@ -1443,9 +1841,17 @@
       const op = operations.get(payload.id);
       if (!op) return;
       const hasError = Boolean(payload.error);
+      if (hasError) {
+        totalOpsFailed += 1;
+        lastActivityLabel = t('activityFailed').replace('{name}', op.name);
+      } else {
+        totalOpsCompleted += 1;
+        lastActivityLabel = t('activityDone').replace('{name}', op.name);
+      }
       const responseSummary = summarizeResponseMessage(op.name, payload);
       log(responseSummary.summary, hasError ? 'error' : 'success', responseSummary.detail);
       removeOperation(payload.id);
+      refreshStatusPanel();
       if (operations.size === 0) {
         completeProgress({ name: op.name, duration: 0 }, true);
       } else {
@@ -1457,29 +1863,39 @@
     function connect() {
       const relayUrl = document.getElementById('relay-url').value.trim();
       if (!relayUrl) {
-        log('请输入 Relay Server 地址', 'error');
+        log(t('enterRelay'), 'error');
         return;
       }
+      clearReconnectTimer();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.close(); } catch (_) {}
+      }
       if (relayHelpCardEl) relayHelpCardEl.classList.remove('attention');
-      if (relayHelpHintEl) relayHelpHintEl.textContent = '若连接失败，请先在项目根目录启动 relay server。';
+      if (relayHelpHintEl) relayHelpHintEl.textContent = t('relayDefaultHint');
       
       connectBtn.disabled = true;
-      connectBtn.textContent = '连接中...';
-      log(`正在连接 Relay Server: ${relayUrl}`, 'info');
+      connectBtn.textContent = t('connectingBtn');
+      log(`${t('connectingRelayLog')}: ${relayUrl}`, 'info');
       
       try {
+        const sessionId = nextBridgeSessionId();
+        currentBridgeSessionId = sessionId;
         // 连接到 relay server（不传 channel，让 server 自动生成）
-        ws = new WebSocket(`${relayUrl}?type=figma`);
+        const socket = new WebSocket(`${relayUrl}?type=figma`);
+        ws = socket;
         
-        ws.onopen = () => {
-          log('已连接到 Relay Server，等待 Channel...', 'success');
+        socket.onopen = () => {
+          if (ws !== socket) return;
+          reconnectAttempts = 0;
+          log(t('connectedRelayWaiting'), 'success');
           // 更新 UI 状态为等待 channel
           statusEl.classList.add('processing');
-          connectionStatusEl.textContent = '等待 Channel...';
-          connectionStatusEl.style.color = 'var(--ui-warning)';
+          connectionState = 'waiting';
+          refreshConnectionStatusLabel();
         };
         
-        ws.onmessage = async (event) => {
+        socket.onmessage = async (event) => {
+          if (ws !== socket) return;
           let rawData = event.data;
           if (rawData instanceof Blob) {
             rawData = await rawData.text();
@@ -1506,7 +1922,8 @@
               parent.postMessage({
                 pluginMessage: {
                   type: 'relay-connected',
-                  channel: currentChannelCode
+                  channel: currentChannelCode,
+                  sessionId
                 }
               }, '*');
             }
@@ -1535,45 +1952,50 @@
 
       if (msg.type === 'get_tools' && Array.isArray(msg.payload?.tools)) {
             availableToolCount = msg.payload.tools.length;
-            refreshToolStats();
+            refreshStatusPanel();
           }
 
           // 转发消息到主线程
           parent.postMessage({
             pluginMessage: {
               type: 'relay-message',
+              sessionId,
               payload: msg
             }
           }, '*');
         };
         
-        ws.onclose = () => {
-          log('与 Relay Server 断开连接', 'warning');
+        socket.onclose = () => {
+          if (ws !== socket) return;
+          log(t('relayDisconnected'), 'warning');
           ws = null;
           currentChannelCode = null;
+          currentBridgeSessionId = null;
           if (!manualDisconnecting) {
-            revealRelayHelp('连接已断开。请确认 Relay Server 仍在运行。');
+            revealRelayHelp(t('relayDisconnectedHint'));
+            scheduleReconnect();
           }
           manualDisconnecting = false;
           showDisconnected();
-          parent.postMessage({ pluginMessage: { type: 'relay-disconnected' } }, '*');
+          parent.postMessage({ pluginMessage: { type: 'relay-disconnected', sessionId } }, '*');
         };
         
-        ws.onerror = (error) => {
-          log('连接失败，请检查 Relay Server 地址', 'error');
-          revealRelayHelp('连接失败。请确认你已在项目根目录运行 relay server。');
+        socket.onerror = (error) => {
+          if (ws !== socket) return;
+          log(t('relayConnectFailed'), 'error');
+          revealRelayHelp(t('relayFailedHint'));
           showDisconnected();
         };
       } catch (err) {
-        log(`连接错误: ${err.message}`, 'error');
-        revealRelayHelp('连接异常。请先启动 Relay Server，再检查地址与端口。');
+        log(`error: ${err.message}`, 'error');
+        revealRelayHelp(t('relayConnectException'));
         showDisconnected();
       }
     }
 
     function copyChannelCode() {
       if (!currentChannelCode) {
-        log('尚未获取 Channel Code，无法复制', 'error');
+        log(t('noChannelCopy'), 'error');
         return;
       }
       copyTextWithFallback(currentChannelCode, 'Channel Code');
@@ -1595,7 +2017,7 @@
 
     function copyConnectPrompt() {
       if (!currentChannelCode) {
-        log('尚未获取 Channel Code，无法复制 Prompt', 'error');
+        log(t('noChannelPromptCopy'), 'error');
         return;
       }
       const prompt = buildConnectPrompt();
@@ -1603,12 +2025,44 @@
       copyTextWithFallback(prompt, 'connect_to_relay Prompt');
     }
 
+    function getRelayUrlInput() {
+      const value = document.getElementById('relay-url')?.value?.trim();
+      return value || 'ws://127.0.0.1:8888';
+    }
+
+    function parseRelayUrl() {
+      const relayUrl = getRelayUrlInput();
+      try {
+        const url = new URL(relayUrl);
+        return { relayUrl, url };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function isLocalRelayHost(hostname) {
+      const h = String(hostname || '').toLowerCase();
+      return h === '127.0.0.1' || h === 'localhost' || h === '::1';
+    }
+
     function buildMcpJsonConfig() {
+      const parsed = parseRelayUrl();
+      let args = ['-y', 'supercharged-figma-mcp', '--local', '--relay-host', '127.0.0.1', '--relay-port', '8888'];
+      if (parsed) {
+        const host = parsed.url.hostname;
+        const port = parsed.url.port || (parsed.url.protocol === 'wss:' ? '443' : '80');
+        if (isLocalRelayHost(host)) {
+          args = ['-y', 'supercharged-figma-mcp', '--local', '--relay-host', host, '--relay-port', String(port)];
+        } else {
+          args = ['-y', 'supercharged-figma-mcp', '--remote', parsed.relayUrl];
+        }
+      }
+
       const config = {
         mcpServers: {
           'supercharged-figma': {
             command: 'npx',
-            args: ['-y', 'supercharged-figma-mcp'],
+            args,
           },
         },
       };
@@ -1616,29 +2070,65 @@
     }
 
     function buildRelayStartCommand() {
-      return 'node relay-server.js';
+      const parsed = parseRelayUrl();
+      if (!parsed) return 'npx -y supercharged-figma-mcp --local --relay-host 127.0.0.1 --relay-port 8888';
+      const host = parsed.url.hostname;
+      const port = parsed.url.port || (parsed.url.protocol === 'wss:' ? '443' : '80');
+      if (isLocalRelayHost(host)) {
+        return `npx -y supercharged-figma-mcp --local --relay-host ${host} --relay-port ${port}`;
+      }
+      return `npx -y supercharged-figma-mcp --remote ${parsed.relayUrl}`;
     }
 
     function buildClaudeAddCommand() {
-      return 'claude mcp add supercharged-figma -- npx -y supercharged-figma-mcp';
+      const parsed = parseRelayUrl();
+      if (!parsed) return 'claude mcp add supercharged-figma -- npx -y supercharged-figma-mcp --local --relay-host 127.0.0.1 --relay-port 8888';
+      const host = parsed.url.hostname;
+      const port = parsed.url.port || (parsed.url.protocol === 'wss:' ? '443' : '80');
+      if (isLocalRelayHost(host)) {
+        return `claude mcp add supercharged-figma -- npx -y supercharged-figma-mcp --local --relay-host ${host} --relay-port ${port}`;
+      }
+      return `claude mcp add supercharged-figma -- npx -y supercharged-figma-mcp --remote ${parsed.relayUrl}`;
+    }
+
+    function buildHostedMcpJsonConfig() {
+      let mcpUrl = 'https://your-domain.example.com/mcp';
+      const parsed = parseRelayUrl();
+      if (parsed && !isLocalRelayHost(parsed.url.hostname)) {
+        const scheme = parsed.url.protocol === 'wss:' ? 'https:' : 'http:';
+        mcpUrl = `${scheme}//${parsed.url.host}/mcp`;
+      }
+      const config = {
+        mcpServers: {
+          'supercharged-figma-http': {
+            url: mcpUrl,
+          },
+        },
+      };
+      return JSON.stringify(config, null, 2);
     }
 
     function renderMcpSetupHints() {
       if (relayStartViewerEl) relayStartViewerEl.textContent = buildRelayStartCommand();
       if (mcpJsonViewerEl) mcpJsonViewerEl.textContent = buildMcpJsonConfig();
       if (claudeAddViewerEl) claudeAddViewerEl.textContent = buildClaudeAddCommand();
+      if (mcpHttpViewerEl) mcpHttpViewerEl.textContent = buildHostedMcpJsonConfig();
     }
 
     function copyRelayStartCommand() {
-      copyTextWithFallback(buildRelayStartCommand(), 'relay 启动命令');
+      copyTextWithFallback(buildRelayStartCommand(), t('relayStartCommandLabel'));
     }
 
     function copyMcpJsonConfig() {
-      copyTextWithFallback(buildMcpJsonConfig(), 'mcp.json 配置');
+      copyTextWithFallback(buildMcpJsonConfig(), t('mcpJsonConfigLabel'));
     }
 
     function copyClaudeAddCommand() {
-      copyTextWithFallback(buildClaudeAddCommand(), 'claude mcp add 命令');
+      copyTextWithFallback(buildClaudeAddCommand(), t('claudeAddCommandLabel'));
+    }
+
+    function copyHostedMcpJsonConfig() {
+      copyTextWithFallback(buildHostedMcpJsonConfig(), t('hostedMcpConfigLabel'));
     }
 
     function fallbackCopyText(text) {
@@ -1657,37 +2147,47 @@
       return ok;
     }
 
-    function copyTextWithFallback(text, label = '内容') {
+    function copyTextWithFallback(text, label = t('contentLabel')) {
       const normalized = String(text ?? '');
       if (!normalized) {
-        log(`${label} 为空，无法复制`, 'error');
+        log(`${label} ${t('copyEmpty')}`, 'error');
         return;
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(normalized).then(() => {
-          log(`${label} 已复制`, 'success');
+          log(`${label} ${t('copyDone')}`, 'success');
         }).catch(() => {
           const ok = fallbackCopyText(normalized);
-          if (ok) log(`${label} 已复制（fallback）`, 'success');
-          else log(`自动复制失败，请手动复制${label}`, 'warning');
+          if (ok) log(`${label} ${t('copyDoneFallback')}`, 'success');
+          else log(`${t('copyFailed')}: ${label}`, 'warning');
         });
         return;
       }
       const ok = fallbackCopyText(normalized);
-      if (ok) log(`${label} 已复制（fallback）`, 'success');
-      else log(`自动复制失败，请手动复制${label}`, 'warning');
+      if (ok) log(`${label} ${t('copyDoneFallback')}`, 'success');
+      else log(`${t('copyFailed')}: ${label}`, 'warning');
     }
 
     function disconnect() {
+      clearReconnectTimer();
+      reconnectAttempts = 0;
       if (ws) {
+        const socket = ws;
         manualDisconnecting = true;
-        ws.close();
-        ws = null;
+        try {
+          socket.close();
+        } catch (_) {
+          manualDisconnecting = false;
+          ws = null;
+          currentChannelCode = null;
+          currentBridgeSessionId = null;
+          showDisconnected();
+          parent.postMessage({ pluginMessage: { type: 'relay-disconnected' } }, '*');
+        }
+      } else {
+        showDisconnected();
+        parent.postMessage({ pluginMessage: { type: 'relay-disconnected' } }, '*');
       }
-      currentChannelCode = null;
-      parent.postMessage({ 
-        pluginMessage: { type: 'relay-disconnected' } 
-      }, '*');
     }
 
     function toggleMcpConfigCard() {
@@ -1697,7 +2197,7 @@
       foldCard.classList.toggle('expanded');
     }
 
-    function revealRelayHelp(message = '连接失败，可能是 Relay Server 未启动。请先启动后重试。') {
+    function revealRelayHelp(message = t('relayFailedHint')) {
       if (relayHelpHintEl) relayHelpHintEl.textContent = message;
       if (!relayHelpCardEl) return;
       relayHelpCardEl.classList.remove('hidden');
@@ -1709,8 +2209,8 @@
     function showConnected() {
       statusEl.classList.add('connected');
       statusEl.classList.remove('processing');
-      connectionStatusEl.textContent = '已连接';
-      connectionStatusEl.style.color = 'var(--ui-success)';
+      connectionState = 'connected';
+      refreshConnectionStatusLabel();
 
       connectBtn.classList.add('hidden');
       disconnectBtn.classList.remove('hidden');
@@ -1719,14 +2219,18 @@
       if (step4WaitingEl) step4WaitingEl.classList.add('hidden');
       renderConnectPrompt();
       setMainTab(currentMainTab || 'status');
+      sessionConnectedAt = Date.now();
+      if (runtimeTimer) clearInterval(runtimeTimer);
+      runtimeTimer = setInterval(refreshStatusPanel, 1000);
+      refreshStatusPanel();
 
-      log('已连接到 MCP Server', 'success');
+      log(t('connectedMcp'), 'success');
     }
 
     function showDisconnected() {
       statusEl.classList.remove('connected', 'processing');
-      connectionStatusEl.textContent = '离线';
-      connectionStatusEl.style.color = 'var(--ui-text-tertiary)';
+      connectionState = 'offline';
+      refreshConnectionStatusLabel();
 
       connectBtn.classList.remove('hidden');
       disconnectBtn.classList.add('hidden');
@@ -1735,15 +2239,24 @@
       if (step4WaitingEl) step4WaitingEl.classList.remove('hidden');
       channelSection.classList.add('hidden');
       connectBtn.disabled = false;
-      connectBtn.textContent = '连接 Relay Server';
+      connectBtn.textContent = t('connectBtn');
       setMainTab('config');
       
       operations.clear();
       collapsedOperationGroups.clear();
       seenTools.clear();
       availableToolCount = 0;
-      refreshToolStats();
-      if (operationsSummaryEl) operationsSummaryEl.textContent = '0 组';
+      totalOpsStarted = 0;
+      totalOpsCompleted = 0;
+      totalOpsFailed = 0;
+      lastActivityLabel = '--';
+      sessionConnectedAt = 0;
+      if (runtimeTimer) {
+        clearInterval(runtimeTimer);
+        runtimeTimer = null;
+      }
+      refreshStatusPanel();
+      if (operationsSummaryEl) operationsSummaryEl.textContent = `0 ${t('groupsUnit')}`;
       updateOperationsList();
       if (progressAutoHideTimer) {
         clearTimeout(progressAutoHideTimer);
@@ -1754,11 +2267,8 @@
         progressStallTimer = null;
       }
       currentProgressValue = 0;
-      progressContainer.classList.remove('active');
-      progressBarFill.style.width = '0%';
-      progressPercentage.textContent = '0%';
       
-      log('已断开连接', 'warning');
+      log(t('disconnectedDone'), 'warning');
     }
 
     window.onmessage = (event) => {
@@ -1774,15 +2284,15 @@
           break;
         case 'error':
           connectBtn.disabled = false;
-          connectBtn.textContent = '连接 MCP Server';
-          log(`错误: ${msg.payload}`, 'error');
+          connectBtn.textContent = t('connectBtn');
+          log(`${t('connectionErrorPrefix')}: ${msg.payload}`, 'error');
           break;
         case 'response':
           settleOperationFromResponse(msg.payload);
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(msg.payload));
           } else {
-            log('无法回传响应：Relay 未连接', 'error');
+            log(t('cannotRelayResponse'), 'error');
           }
           break;
         case 'progress':
@@ -1806,15 +2316,19 @@
       }
     };
 
-    // 检查初始状态
+    // Initial state
     parent.postMessage({ pluginMessage: { type: 'get-status' } }, '*');
-    document.getElementById('relay-url').addEventListener('input', renderConnectPrompt);
+    document.getElementById('relay-url').addEventListener('input', () => {
+      renderConnectPrompt();
+      renderMcpSetupHints();
+    });
     window.addEventListener('resize', applyViewportLayout);
     applyViewportLayout();
+    setLanguage(detectDefaultLanguage());
     renderMcpSetupHints();
     renderConnectPrompt();
     setMainTab('config');
-    log('等待连接...', 'info');
+    log(t('waitingConnect'), 'info');
   </script>
 </body>
 </html>

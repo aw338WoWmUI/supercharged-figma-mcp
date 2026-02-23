@@ -1,114 +1,148 @@
 # Supercharged Figma MCP
 
-Supercharged Figma MCP 是一个可操作 Figma 桌面端的 MCP Server + Figma Plugin 组合。
+## English
+Supercharged Figma MCP is an MCP Server + Figma Plugin stack that lets agents perform real Figma operations (not read-only).
 
-它的目标是让 Agent 不只是“读设计”，还能真正执行设计操作：创建/编辑节点、组件化、原型交互、跨页面整理、样式与变量操作等。
+- User guide: `USER_GUIDE.md`
+- Developer guide: `DEVELOPER_GUIDE.md`
 
-## 文档
+### Quick Start
+```bash
+npm install
+npm run build
+npm run plugin:build
+npm run start
+```
+
+### Runtime Modes
+```bash
+# local mode (embedded relay + MCP stdio)
+node dist/server.js --local
+
+# remote relay mode
+node dist/server.js --remote wss://example.com/supercharged-figma/ws
+
+# expose MCP as streamable HTTP
+node dist/server.js --local --transport http --host 127.0.0.1 --port 3333 --mcp-path /mcp
+```
+
+### npx
+```bash
+npx -y supercharged-figma-mcp --local
+```
+
+### MCP Config Examples
+```json
+{
+  "mcpServers": {
+    "supercharged-figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supercharged-figma-mcp",
+        "--local",
+        "--relay-host",
+        "127.0.0.1",
+        "--relay-port",
+        "8888"
+      ]
+    }
+  }
+}
+```
+
+```json
+{
+  "mcpServers": {
+    "supercharged-figma-http": {
+      "url": "https://your-domain.example.com/mcp"
+    }
+  }
+}
+```
+
+### Protocol Split
+- MCP Client -> MCP Server: `stdio` or `http/https` (Streamable HTTP)
+- Figma Plugin <-> Relay: `ws/wss`
+
+### Project Layout
+- `src/`: MCP server (TypeScript)
+- `figma-plugin/`: plugin runtime (`code.ts`) and UI (`ui-enhanced.html`)
+- `deploy/cloudflare/`: Worker deployment template for `/mcp` and `/supercharged-figma/ws`
+
+### Release
+GitHub release is driven by `.github/workflows/npm-publish.yml`:
+- Publish trigger: push tags matching `v*` (for example `v1.0.4`)
+- Manual trigger: `workflow_dispatch`
+- CI will run build/test checks before `npm publish`
+
+## 简体中文
+Supercharged Figma MCP 是一个 MCP Server + Figma 插件组合，支持 Agent 对 Figma 进行真实可执行操作。
 
 - 用户文档：`USER_GUIDE.md`
 - 开发者文档：`DEVELOPER_GUIDE.md`
 
-## 项目结构
-
-- `src/`：MCP Server 源码（TypeScript）
-- `figma-plugin/`：Figma 插件源码（`code.ts` + `ui-enhanced.html`）
-- `dist/`：构建产物（MCP Server）
-- `src/runtime/embedded-relay.ts`：内嵌 relay（默认随 MCP 启动）
-- `relay-server.js`：外置 relay（兼容模式）
-- `deploy/cloudflare/`：Cloudflare Worker 模板（`/supercharged-figma/ws` + `/mcp`）
-
-## 快速开始（开发）
-
-1. 安装依赖
-
+### 快速开始
 ```bash
 npm install
-```
-
-2. 构建
-
-```bash
 npm run build
 npm run plugin:build
-```
-
-3. 启动 MCP Server（stdio，默认内嵌 relay）
-
-```bash
 npm run start
 ```
 
-可选参数（新模式）：
-
+### 运行模式
 ```bash
-# 本地模式（默认）：内嵌 relay + MCP stdio
+# 本地模式（内嵌 relay + MCP stdio）
 node dist/server.js --local
 
-# 远端 relay 模式（MCP stdio）
+# 远端 relay 模式
 node dist/server.js --remote wss://example.com/supercharged-figma/ws
 
-# MCP 以 HTTP Streamable 暴露（可用于远端部署）
+# MCP 以 Streamable HTTP 暴露
 node dist/server.js --local --transport http --host 127.0.0.1 --port 3333 --mcp-path /mcp
-
-# 自定义 relay ws 路径（本地/远端统一）
-node dist/server.js --local --relay-host 127.0.0.1 --relay-port 8888 --relay-path /supercharged-figma/ws
-
-# 兼容旧参数
-node dist/server.js --relay-mode=local --relay-host=127.0.0.1 --relay-port=8888
-node dist/server.js --relay-mode=remote --relay-url=ws://127.0.0.1:8888
 ```
 
-`npx` 直接运行示例：
-
+### npx
 ```bash
-npx supercharged-figma-mcp --local
-npx supercharged-figma-mcp --local --host 127.0.0.1 --port 3333
-npx supercharged-figma-mcp --remote wss://example.com/supercharged-figma/ws --transport http --host 0.0.0.0 --port 3333
+npx -y supercharged-figma-mcp --local
 ```
 
-协议分层（重要）：
-
-- MCP Client → MCP Server：`http/https`（Streamable HTTP）
-- Figma Plugin ↔ Relay：`ws/wss`
-
-Cloudflare Worker 说明：
-
-- `deploy/cloudflare/worker-relay.ts` 同时提供 `/mcp` 和 `/supercharged-figma/ws`
-- `/mcp` 支持多会话（`mcp-session-id`）与可选 API key 鉴权（`MCP_API_KEYS` secret）
-
-4. 在 Figma 导入插件
-
-- Figma Desktop → Plugins → Development → Import plugin from manifest
-- 选择：`figma-plugin/manifest.json`
-
-5. 连接 relay
-
-- 默认不需要手动启动 relay（已内嵌）
-- 在插件 `Config` 页输入 relay 地址并连接
-- 复制 channel code 到 Agent 侧执行 `connect_to_relay`
-
-## 常用脚本
-
-```bash
-npm run build            # 构建 MCP Server
-npm run plugin:build     # 构建 Figma 插件 code.ts
-npm run lint             # TypeScript 检查
-npm run test             # 测试
-npm run validate         # lint + build + test
+### MCP 配置示例
+```json
+{
+  "mcpServers": {
+    "supercharged-figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supercharged-figma-mcp",
+        "--local",
+        "--relay-host",
+        "127.0.0.1",
+        "--relay-port",
+        "8888"
+      ]
+    }
+  }
+}
 ```
 
-## GitHub 自动发布 npm
+```json
+{
+  "mcpServers": {
+    "supercharged-figma-http": {
+      "url": "https://your-domain.example.com/mcp"
+    }
+  }
+}
+```
 
-仓库已提供 workflow：`.github/workflows/npm-publish.yml`
+### 协议分层
+- MCP Client -> MCP Server：`stdio` 或 `http/https`（Streamable HTTP）
+- Figma 插件 <-> Relay：`ws/wss`
 
-- 触发方式：
-  - 手动触发 `workflow_dispatch`
-  - 推送 tag（如 `v1.0.1`）
-- 发布前会执行：`npm ci`、`npm run build`、`npm run test:integration`
-- 需要在仓库 Secrets 配置：`NPM_TOKEN`
-
-## 注意
-
-- `figma-plugin/code.js` 是由 `figma-plugin/code.ts` 编译生成，请改 TS 不直接改 JS。
-- 插件 UI 入口：`figma-plugin/ui-enhanced.html`。
+### 发布
+GitHub 自动发布由 `.github/workflows/npm-publish.yml` 处理：
+- 触发方式：推送形如 `v*` 的 tag（例如 `v1.0.4`）
+- 手动触发：`workflow_dispatch`
+- 发布流程：CI 先执行构建与测试，再执行 `npm publish`

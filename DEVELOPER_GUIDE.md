@@ -1,39 +1,14 @@
-# 开发者文档
+# Developer Guide / 开发者文档
 
-本文档面向维护者，说明架构、构建与代码约定。
+## English
+### Architecture
+- MCP Server: `src/server.ts`
+- Plugin runtime: `figma-plugin/code.ts`
+- Plugin UI: `figma-plugin/ui-enhanced.html`
+- Embedded relay: `src/runtime/embedded-relay.ts`
+- Cloudflare deploy template: `deploy/cloudflare/`
 
-## 1. 架构概览
-
-系统由三部分组成：
-
-1. MCP Server（`src/server.ts`）
-- 通过 stdio 对接 Agent
-- 暴露工具描述与调用入口
-- 通过 WebSocket relay 与 Figma 插件通信
-
-2. Figma Plugin（`figma-plugin/code.ts` + `figma-plugin/ui-enhanced.html`）
-- `code.ts`：在 Figma 运行时执行具体节点操作
-- `ui-enhanced.html`：连接、状态、日志与用户交互
-
-3. Relay Runtime
-- 默认：内嵌 relay（`src/runtime/embedded-relay.ts`）随 MCP 进程启动
-- 兼容：外置 relay（`relay-server.js`）
-- 单实例守护：`src/runtime/instance-manager.ts`，避免重复占用同一 host/port
-- 远端模板：`deploy/cloudflare/worker-relay.ts`（`/supercharged-figma/ws`）
-
-## 2. 关键目录
-
-- `src/server.ts`：MCP 工具定义、参数 schema、请求分发
-- `src/runtime/embedded-relay.ts`：内嵌 relay runtime
-- `src/runtime/instance-manager.ts`：relay 单实例锁
-- `src/progress-manager.ts`：进度管理
-- `src/enhanced-batch-operations.ts`：批量操作执行器
-- `src/rest-bridge.ts`：REST 侧桥接能力
-- `src/tests/`：单元与集成测试
-- `figma-plugin/manifest.json`：插件清单（当前 UI: `ui-enhanced.html`）
-
-## 3. 构建与运行
-
+### Build & Verify
 ```bash
 npm install
 npm run build
@@ -41,67 +16,100 @@ npm run plugin:build
 npm run test
 ```
 
-启动模式：
-
+### Runtime Modes
 ```bash
-# 默认：本地模式（local）+ stdio + 内嵌 relay
+# local: embedded relay + MCP stdio
 node dist/server.js --local
 
-# 远端 relay 模式（不启动本地 relay）
-node dist/server.js --remote wss://your-relay-host/supercharged-figma/ws
+# remote relay
+node dist/server.js --remote wss://example.com/supercharged-figma/ws
 
-# MCP 以 HTTP Streamable 暴露（本地或部署场景）
-node dist/server.js --local --transport http --host 0.0.0.0 --port 3333 --mcp-path /mcp
-
-# relay 路径自定义（和远端保持一致）
-node dist/server.js --local --relay-path /supercharged-figma/ws
+# streamable MCP over HTTP
+node dist/server.js --local --transport http --host 127.0.0.1 --port 3333 --mcp-path /mcp
 ```
 
-- MCP Server 构建产物在 `dist/`
-- 插件运行入口为 `figma-plugin/code.js`（由 `code.ts` 编译）
+### Conventions
+- Edit TS source, not generated JS (`figma-plugin/code.js`).
+- Keep tool schemas and actual behavior aligned.
+- Keep UI compact for small plugin window.
+- Keep user strings internationalized (`zh-CN` and `en`).
 
-## 4. 开发约定
+### Reference Alignment (Design With AI / TalkToFigma)
+Based on these references:
+- `grab/cursor-talk-to-figma-mcp` (tool strategy + relay workflow)
+- `aranyak-4002/figma-design-mcp` (automation-oriented plugin patterns)
 
-1. 插件逻辑修改原则
-- 改 `figma-plugin/code.ts`，不要手改 `figma-plugin/code.js`
-- UI 改 `figma-plugin/ui-enhanced.html`
+Recent alignment changes:
+- `batch_create` now accepts create-type aliases across formats:
+  - snake_case: `create_frame`
+  - camelCase: `createFrame`
+  - plain type: `frame`
+  - kebab/uppercase variants are normalized too
+- paint inputs are normalized consistently in creation and batch paths:
+  - supports `#RRGGBB` / `#RGB`
+  - supports full Figma paint objects
+- `create_vector` accepts path aliases:
+  - `vectorPaths`, `vectorPath`, `path`, `svgPath`, `d`
+- `create_interaction` schema no longer advertises deprecated trigger keys that Figma rejects (e.g. `deprecatedVersion`).
 
-2. 工具定义一致性
-- `src/server.ts` 的工具描述必须与真实行为一致
-- 新增/修改工具时，同时更新参数 schema 与插件执行端处理逻辑
+Practical implication:
+- Agent prompt-level parameter variance is tolerated better.
+- Tool descriptions now better reflect actual runtime behavior.
+- Fewer "schema says yes but plugin rejects" mismatches.
 
-3. 日志与错误处理
-- MCP stdout 保持协议输出，运行日志走 stderr（已在 `server.ts` 处理）
-- 错误消息保持结构化，便于 UI `Logs` 展示明细
+## 简体中文
+### 架构
+- MCP Server：`src/server.ts`
+- 插件执行层：`figma-plugin/code.ts`
+- 插件 UI：`figma-plugin/ui-enhanced.html`
+- 内嵌 relay：`src/runtime/embedded-relay.ts`
+- Cloudflare 部署模板：`deploy/cloudflare/`
 
-4. UI 设计原则（插件小窗）
-- 紧凑但可读
-- `Config / Status / Logs` 分区清晰
-- 顶部连接状态全局可见
-- 日志支持展开详情
+### 构建与验证
+```bash
+npm install
+npm run build
+npm run plugin:build
+npm run test
+```
 
-## 5. 发布前检查清单
+### 运行模式
+```bash
+# 本地模式：内嵌 relay + MCP stdio
+node dist/server.js --local
 
-1. `npm run lint`
-2. `npm run build`
-3. `npm run plugin:build`
-4. `npm run test`
-5. 在 Figma 真机验证：
-- 连接/断开
-- 复制 channel/prompt
-- 常用工具调用（至少 create/modify/prototype 各一类）
+# 远端 relay 模式
+node dist/server.js --remote wss://example.com/supercharged-figma/ws
 
-## 6. 常见维护任务
+# Streamable HTTP MCP 模式
+node dist/server.js --local --transport http --host 127.0.0.1 --port 3333 --mcp-path /mcp
+```
 
-## 新增工具
+### 约定
+- 修改 TS 源码，不直接改生成文件（`figma-plugin/code.js`）。
+- 工具 schema 与真实行为保持一致。
+- 插件 UI 以小窗口可读性优先。
+- 用户文案必须支持国际化（`zh-CN` / `en`）。
 
-1. 在 `src/server.ts` 增加 tool schema
-2. 在同文件调用分发中增加 case
-3. 在 `figma-plugin/code.ts` 实现对应处理
-4. 编译并实测
+### 参考对齐（Design With AI / TalkToFigma）
+参考仓库：
+- `grab/cursor-talk-to-figma-mcp`（工具策略与 relay 工作流）
+- `aranyak-4002/figma-design-mcp`（自动化插件模式）
 
-## 调整插件 UI
+本轮已落地：
+- `batch_create` 支持多种创建类型别名写法：
+  - snake：`create_frame`
+  - camel：`createFrame`
+  - plain：`frame`
+  - kebab/大写也会归一化
+- 创建与批量创建路径统一了 paint 输入归一化：
+  - 支持 `#RRGGBB` / `#RGB`
+  - 支持完整 Figma paint 对象
+- `create_vector` 支持多种路径参数别名：
+  - `vectorPaths`、`vectorPath`、`path`、`svgPath`、`d`
+- `create_interaction` 的 schema 移除了会被 Figma 拒绝的过时 trigger 字段（例如 `deprecatedVersion`）。
 
-1. 在 `figma-plugin/ui-enhanced.html` 修改
-2. 保持三 Tab 信息架构
-3. 确认小窗口下无裁切、无大面积空白
+效果：
+- Agent 参数写法更宽容，工具调用更稳。
+- 工具描述与真实行为更一致。
+- 减少“schema 看起来可用但运行报错”的情况。

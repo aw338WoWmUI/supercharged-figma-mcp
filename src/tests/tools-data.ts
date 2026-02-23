@@ -154,6 +154,7 @@ export const TOOLS: Tool[] = [
   { name: 'import_style_from_file', description: 'Import style from another file', inputSchema: { type: 'object', properties: {} } },
   { name: 'get_node_info', description: 'Get detailed node information', inputSchema: { type: 'object', properties: {} } },
   { name: 'get_document_info', description: 'Get document structure', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_selection', description: 'Get current selection with node metadata', inputSchema: { type: 'object', properties: {} } },
   { name: 'set_layout_mode', description: 'Set frame layout mode', inputSchema: { type: 'object', properties: {} } },
   { name: 'set_item_spacing', description: 'Set item spacing', inputSchema: { type: 'object', properties: {} } },
   { name: 'set_layout_sizing', description: 'Set layout sizing', inputSchema: { type: 'object', properties: {} } },
