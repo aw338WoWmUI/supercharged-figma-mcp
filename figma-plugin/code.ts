@@ -6,6 +6,49 @@ let activeBridgeSessionId: string | null = null;
 let pendingDisconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const TOOL_EXECUTION_TIMEOUT_MS = 120000;
 
+type PluginToolDescriptor = {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    additionalProperties?: boolean;
+  };
+};
+
+let pluginToolCatalog: PluginToolDescriptor[] | null = null;
+
+function getPluginToolCatalog(): PluginToolDescriptor[] {
+  if (pluginToolCatalog) return pluginToolCatalog;
+
+  const source = handleMessage.toString();
+  const matchPattern = /case\s+['\"]([^'\"]+)['\"]\s*:/g;
+  const names = new Set<string>();
+
+  let match: RegExpExecArray | null;
+  while ((match = matchPattern.exec(source)) !== null) {
+    const toolName = match[1];
+    if (!toolName) continue;
+    names.add(toolName);
+  }
+
+  const excluded = new Set(['get_tools', 'progress_update', 'progress_complete', 'log']);
+  pluginToolCatalog = [...names]
+    .filter((name) => !excluded.has(name))
+    .sort()
+    .map((name) => ({
+      name,
+      description: `Figma plugin tool: ${name}`,
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        additionalProperties: true,
+      },
+    }));
+
+  return pluginToolCatalog;
+}
+
 function bridgeLog(message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info') {
   try {
     figma.ui.postMessage({ type: 'log', payload: { message: `[Bridge] ${message}`, level } });
@@ -248,6 +291,10 @@ async function handleMessage(message: PluginMessage) {
       case 'progress_complete':
       case 'log':
         return { ignored: true };
+
+      case 'get_tools':
+        result = { tools: getPluginToolCatalog() };
+        break;
 
       // Smart Discovery
       case 'smart_select':

@@ -4,6 +4,38 @@ let isConnected = false;
 let activeBridgeSessionId = null;
 let pendingDisconnectTimer = null;
 const TOOL_EXECUTION_TIMEOUT_MS = 120000;
+/**
+ * Build tool catalog from this file's switch cases.
+ * This avoids hardcoding tool schemas in both MCP worker and plugin.
+ */
+let pluginToolCatalog = null;
+function getPluginToolCatalog() {
+    if (pluginToolCatalog) return pluginToolCatalog;
+    const source = handleMessage.toString();
+    const matchPattern = /case\s+['"]([^'"]+)['"]\s*:/g;
+    const names = new Set();
+    let match = null;
+    while ((match = matchPattern.exec(source)) !== null) {
+        const toolName = match[1];
+        if (!toolName)
+            continue;
+        names.add(toolName);
+    }
+    const excluded = new Set(['get_tools', 'progress_update', 'progress_complete', 'log']);
+    pluginToolCatalog = Array.from(names)
+        .filter((name) => !excluded.has(name))
+        .sort()
+        .map((name) => ({
+        name,
+        description: `Figma plugin tool: ${name}`,
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: true,
+        },
+    }));
+    return pluginToolCatalog;
+}
 function bridgeLog(message, level = 'info') {
     try {
         figma.ui.postMessage({ type: 'log', payload: { message: `[Bridge] ${message}`, level } });
@@ -41,6 +73,9 @@ async function handleMessage(message) {
             case 'progress_complete':
             case 'log':
                 return { ignored: true };
+            case 'get_tools':
+                result = { tools: getPluginToolCatalog() };
+                break;
             // Smart Discovery
             case 'smart_select':
                 result = await smartSelect(payload.query, payload.scope, payload.limit, payload.pageIds, payload.pageNames);
