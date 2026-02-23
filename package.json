@@ -1,6 +1,6 @@
 {
   "name": "supercharged-figma-mcp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Supercharged Figma MCP Server with full automation support",
   "main": "dist/server.js",
   "type": "module",
@@ -21,12 +21,15 @@
     "setup-mcp.sh"
   ],
   "bin": {
-    "supercharged-figma-mcp": "bin/supercharged-figma-mcp.js"
+    "supercharged-figma-mcp": "./bin/supercharged-figma-mcp.js"
   },
   "scripts": {
-    "build": "tsc",
-    "plugin:build": "tsc -p figma-plugin/tsconfig.json --noCheck",
-    "plugin:typecheck": "tsc -p figma-plugin/tsconfig.json --noEmit --noCheck false",
+    "build": "npm run build:mcp && npm run build:plugin",
+    "build:mcp": "tsc",
+    "build:plugin": "tsc -p figma-plugin/tsconfig.json --noCheck",
+    "plugin:build": "npm run build:plugin",
+    "typecheck:plugin": "tsc -p figma-plugin/tsconfig.json --noEmit --noCheck false",
+    "plugin:typecheck": "npm run typecheck:plugin",
     "dev": "tsc --watch",
     "start": "node dist/server.js --local",
     "start:http": "node dist/server.js --local --transport http --host 127.0.0.1 --port 3333 --mcp-path /mcp",
