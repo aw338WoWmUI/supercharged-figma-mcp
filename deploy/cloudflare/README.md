@@ -23,6 +23,7 @@ wrangler login
 cd deploy/cloudflare
 # 可选：设置 MCP API 鉴权 key（逗号分隔多个）
 wrangler secret put MCP_API_KEYS
+# 可选：在 wrangler.toml 的 [vars] 中设置/更新 WORKER_VERSION
 wrangler deploy
 ```
 

@@ -10,11 +10,19 @@ import { FULL_TOOLS_FALLBACK } from './fallback-tools.js';
 export interface Env {
   RELAY_ROOM: DurableObjectNamespace;
   MCP_API_KEYS?: string;
+  WORKER_VERSION?: string;
 }
 
 const RELAY_PATH = '/supercharged-figma/ws';
 const MCP_PATH = '/mcp';
-const WORKER_VERSION = '1.0.5';
+const DEFAULT_WORKER_VERSION = 'dev';
+const WS_OPEN = 1;
+const FIGMA_HEARTBEAT_TIMEOUT_MS = 75_000;
+
+function resolveWorkerVersion(env: Env): string {
+  const configured = env.WORKER_VERSION?.trim();
+  return configured || DEFAULT_WORKER_VERSION;
+}
 
 interface SessionContext {
   createdAt: number;
@@ -136,8 +144,9 @@ async function buildTools(env: Env, channelCode: string | null): Promise<Tool[]>
 }
 
 async function createMcpServer(env: Env, session: SessionContext): Promise<Server> {
+  const workerVersion = resolveWorkerVersion(env);
   const server = new Server(
-    { name: 'supercharged-figma-worker-mcp', version: '0.1.0' },
+    { name: 'supercharged-figma-worker-mcp', version: workerVersion },
     { capabilities: { tools: {} } }
   );
 
@@ -271,7 +280,7 @@ export default {
     if (url.pathname === '/healthz') {
       return json({
         ok: true,
-        version: WORKER_VERSION,
+        version: resolveWorkerVersion(env),
         service: 'supercharged-figma-worker',
         relayPath: RELAY_PATH,
         mcpPath: MCP_PATH,
@@ -299,7 +308,13 @@ export default {
       }
 
       session.lastSeenAt = Date.now();
-      const response = await session.transport.handleRequest(request);
+      let response: Response;
+      try {
+        response = await session.transport.handleRequest(request);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        return json({ ok: false, error: 'MCP transport failure', detail }, 500);
+      }
       const returnedSessionId = response.headers.get('mcp-session-id');
       if (returnedSessionId && !sessions.has(returnedSessionId)) {
         sessions.set(returnedSessionId, session);
@@ -347,6 +362,8 @@ export default {
 
 export class RelayRoomDO {
   private figma: WebSocket | null = null;
+  private figmaChannel: string | null = null;
+  private figmaHeartbeatTimer: number | null = null;
   private clients = new Set<WebSocket>();
   private pending = new Map<string, {
     resolve: (value: unknown) => void;
@@ -354,11 +371,53 @@ export class RelayRoomDO {
     timeout: number;
   }>();
 
+  private isSocketOpen(ws: WebSocket | null): ws is WebSocket {
+    return !!ws && ws.readyState === WS_OPEN;
+  }
+
+  private isFigmaConnected(): boolean {
+    return this.isSocketOpen(this.figma);
+  }
+
+  private clearFigmaHeartbeat() {
+    if (this.figmaHeartbeatTimer === null) return;
+    clearTimeout(this.figmaHeartbeatTimer);
+    this.figmaHeartbeatTimer = null;
+  }
+
+  private resetFigmaHeartbeat(channel: string) {
+    this.clearFigmaHeartbeat();
+    this.figmaHeartbeatTimer = setTimeout(() => {
+      this.markFigmaDisconnected(channel);
+    }, FIGMA_HEARTBEAT_TIMEOUT_MS) as unknown as number;
+  }
+
+  private markFigmaDisconnected(channel: string) {
+    if (!this.figma && !this.figmaChannel && this.pending.size === 0) return;
+    this.clearFigmaHeartbeat();
+    const current = this.figma;
+    this.figma = null;
+    this.figmaChannel = null;
+    if (current && current.readyState !== 3) {
+      try {
+        current.close(1011, 'Figma disconnected');
+      } catch {
+        // ignore
+      }
+    }
+    this.broadcastClients({ type: 'system', event: 'figma_disconnected', channel });
+    for (const [id, pending] of this.pending.entries()) {
+      clearTimeout(pending.timeout);
+      pending.reject(new Error(`Figma disconnected while waiting for ${id}`));
+    }
+    this.pending.clear();
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname.endsWith('/status') || url.pathname === '/status') {
-      return json({ figmaConnected: !!this.figma });
+      return json({ figmaConnected: this.isFigmaConnected(), channel: this.figmaChannel });
     }
 
     if (url.pathname.endsWith('/bridge') || url.pathname === '/bridge') {
@@ -389,7 +448,7 @@ export class RelayRoomDO {
     const message = body.message;
     const timeoutMs = typeof body.timeoutMs === 'number' ? body.timeoutMs : 120000;
 
-    if (!this.figma) {
+    if (!this.isFigmaConnected()) {
       return json({ ok: false, error: 'Figma not connected' }, 409);
     }
     if (!message || typeof message !== 'object') {
@@ -398,8 +457,10 @@ export class RelayRoomDO {
 
     const messageId = (message as any).id;
     try {
-      this.figma.send(JSON.stringify(message));
+      this.figma!.send(JSON.stringify(message));
+      if (this.figmaChannel) this.resetFigmaHeartbeat(this.figmaChannel);
     } catch {
+      this.markFigmaDisconnected(this.figmaChannel || 'UNKNOWN');
       return json({ ok: false, error: 'Failed to send to Figma' }, 500);
     }
 
@@ -439,16 +500,24 @@ export class RelayRoomDO {
         }
       }
       this.figma = ws;
+      this.figmaChannel = channel;
+      this.resetFigmaHeartbeat(channel);
       this.sendJson(ws, { type: 'system', event: 'connected', channel });
       this.broadcastClients({ type: 'system', event: 'figma_connected', channel });
 
       ws.addEventListener('message', (event: MessageEvent) => {
+        this.resetFigmaHeartbeat(channel);
         const maybeText = typeof event.data === 'string' ? event.data : '';
         let parsed: any = null;
         try {
           parsed = maybeText ? JSON.parse(maybeText) : null;
         } catch {
           parsed = null;
+        }
+
+        if (parsed?.type === 'system' && (parsed.event === 'heartbeat' || parsed.event === 'ping')) {
+          this.sendJson(ws, { type: 'system', event: 'heartbeat_ack', ts: Date.now() });
+          return;
         }
 
         if (parsed && typeof parsed.id === 'string') {
@@ -466,33 +535,33 @@ export class RelayRoomDO {
           try {
             client.send(event.data);
           } catch {
-            // ignore
+            this.clients.delete(client);
           }
         }
       });
 
       ws.addEventListener('close', () => {
         if (this.figma === ws) {
-          this.figma = null;
-          this.broadcastClients({ type: 'system', event: 'figma_disconnected', channel });
-          for (const [id, pending] of this.pending.entries()) {
-            clearTimeout(pending.timeout);
-            pending.reject(new Error(`Figma disconnected while waiting for ${id}`));
-          }
-          this.pending.clear();
+          this.markFigmaDisconnected(channel);
+        }
+      });
+      ws.addEventListener('error', () => {
+        if (this.figma === ws) {
+          this.markFigmaDisconnected(channel);
         }
       });
       return;
     }
 
     this.clients.add(ws);
-    this.sendJson(ws, { type: 'system', event: 'connected', channel, figmaConnected: !!this.figma });
+    this.sendJson(ws, { type: 'system', event: 'connected', channel, figmaConnected: this.isFigmaConnected() });
 
     ws.addEventListener('message', (event: MessageEvent) => {
-      if (this.figma) {
+      if (this.isFigmaConnected()) {
         try {
-          this.figma.send(event.data);
+          this.figma!.send(event.data);
         } catch {
+          this.markFigmaDisconnected(this.figmaChannel || channel);
           this.sendJson(ws, { type: 'system', event: 'error', error: 'Figma not connected' });
         }
       } else {
@@ -501,6 +570,9 @@ export class RelayRoomDO {
     });
 
     ws.addEventListener('close', () => {
+      this.clients.delete(ws);
+    });
+    ws.addEventListener('error', () => {
       this.clients.delete(ws);
     });
   }
@@ -517,6 +589,7 @@ export class RelayRoomDO {
   }
 
   private sendJson(ws: WebSocket, payload: unknown) {
+    if (ws.readyState !== WS_OPEN) return;
     try {
       ws.send(JSON.stringify(payload));
     } catch {

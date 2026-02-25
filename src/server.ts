@@ -25,6 +25,7 @@ import { createServer, IncomingMessage, Server as HttpServer, ServerResponse } f
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
 // MCP over stdio requires stdout to be protocol-only JSON-RPC.
 // Route operational logs to stderr to avoid breaking the transport.
@@ -34,7 +35,16 @@ const logToStderr = (...args: unknown[]) => {
 console.log = logToStderr;
 console.info = logToStderr;
 console.warn = logToStderr;
-const MCP_SERVER_VERSION = '1.0.3';
+const require = createRequire(import.meta.url);
+const MCP_SERVER_VERSION = (() => {
+  try {
+    return require('../package.json')?.version || 'dev';
+  } catch {
+    return 'dev';
+  }
+})();
+const RELAY_PING_INTERVAL_MS = 20_000;
+const RELAY_PONG_TIMEOUT_MS = 45_000;
 
 // WebSocket connection to Figma Plugin via Relay Server
 class FigmaPluginConnection {
@@ -49,6 +59,8 @@ class FigmaPluginConnection {
   private channelId: string | null = null;
   private connectSeq = 0;
   private readonly debugEvents: Array<{ ts: string; event: string; detail?: string }> = [];
+  private relayPingTimer: NodeJS.Timeout | null = null;
+  private relayPongDeadlineTimer: NodeJS.Timeout | null = null;
 
   private pushDebug(event: string, detail?: string) {
     this.debugEvents.push({ ts: new Date().toISOString(), event, detail });
@@ -78,6 +90,60 @@ class FigmaPluginConnection {
     }
   }
 
+  private clearRelayKeepaliveTimers() {
+    if (this.relayPingTimer) {
+      clearInterval(this.relayPingTimer);
+      this.relayPingTimer = null;
+    }
+    if (this.relayPongDeadlineTimer) {
+      clearTimeout(this.relayPongDeadlineTimer);
+      this.relayPongDeadlineTimer = null;
+    }
+  }
+
+  private refreshRelayPongDeadline(socket: WebSocket, connectId: number) {
+    if (this.relayPongDeadlineTimer) clearTimeout(this.relayPongDeadlineTimer);
+    this.relayPongDeadlineTimer = setTimeout(() => {
+      if (socket !== this.ws) return;
+      if (socket.readyState !== WebSocket.OPEN) return;
+      this.pushDebug('keepalive_timeout', `connect#${connectId}`);
+      try {
+        socket.terminate();
+      } catch {
+        // ignore
+      }
+    }, RELAY_PONG_TIMEOUT_MS);
+  }
+
+  private startRelayKeepalive(socket: WebSocket, connectId: number) {
+    this.clearRelayKeepaliveTimers();
+    this.refreshRelayPongDeadline(socket, connectId);
+
+    socket.on('pong', () => {
+      if (socket !== this.ws) return;
+      this.pushDebug('keepalive_pong', `connect#${connectId}`);
+      this.refreshRelayPongDeadline(socket, connectId);
+    });
+
+    this.relayPingTimer = setInterval(() => {
+      if (socket !== this.ws) {
+        this.clearRelayKeepaliveTimers();
+        return;
+      }
+      if (socket.readyState !== WebSocket.OPEN) return;
+      try {
+        socket.ping();
+        this.pushDebug('keepalive_ping', `connect#${connectId}`);
+      } catch {
+        try {
+          socket.terminate();
+        } catch {
+          // ignore
+        }
+      }
+    }, RELAY_PING_INTERVAL_MS);
+  }
+
   connect(relayUrl: string, channelId: string): Promise<void> {
     const url = `${relayUrl}?channel=${channelId}&type=client`;
     const connectId = ++this.connectSeq;
@@ -86,6 +152,7 @@ class FigmaPluginConnection {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.ws.close();
       }
+      this.clearRelayKeepaliveTimers();
 
       this.connected = false;
       this.figmaConnected = false;
@@ -107,6 +174,7 @@ class FigmaPluginConnection {
       socket.on('open', () => {
         if (socket !== this.ws) return;
         this.connected = true;
+        this.startRelayKeepalive(socket, connectId);
         console.log(chalk.green(`[MCP pid=${process.pid}] [connect#${connectId}] ✓ Connected to relay (channel: ${channelId})`));
         this.pushDebug('socket_open', `connect#${connectId} channel=${channelId}`);
 
@@ -119,6 +187,7 @@ class FigmaPluginConnection {
 
       socket.on('message', (data: WebSocket.Data) => {
         if (socket !== this.ws) return;
+        this.refreshRelayPongDeadline(socket, connectId);
         const message = this.parseIncomingMessage(data);
         if (!message) return;
 
@@ -157,6 +226,7 @@ class FigmaPluginConnection {
 
       socket.on('close', () => {
         if (socket !== this.ws) return;
+        this.clearRelayKeepaliveTimers();
         this.connected = false;
         this.figmaConnected = false;
         console.log(chalk.yellow(`[MCP pid=${process.pid}] [connect#${connectId}] ! Disconnected from relay`));
@@ -169,6 +239,7 @@ class FigmaPluginConnection {
 
       socket.on('error', (err) => {
         if (socket !== this.ws) return;
+        this.clearRelayKeepaliveTimers();
         console.error(chalk.red(`[MCP pid=${process.pid}] [connect#${connectId}] socket error:`), err);
         this.pushDebug('socket_error', `connect#${connectId} err=${(err as any)?.message || String(err)}`);
         if (!settled) {
@@ -249,6 +320,7 @@ class FigmaPluginConnection {
   }
 
   setWebSocket(ws: WebSocket) {
+    this.clearRelayKeepaliveTimers();
     this.ws = ws;
     this.connected = true;
     this.figmaConnected = true;
@@ -260,6 +332,7 @@ class FigmaPluginConnection {
     });
 
     ws.on('close', () => {
+      this.clearRelayKeepaliveTimers();
       this.connected = false;
       this.figmaConnected = false;
       this.channelId = null;
@@ -268,6 +341,7 @@ class FigmaPluginConnection {
     });
 
     ws.on('error', (err) => {
+      this.clearRelayKeepaliveTimers();
       console.error(chalk.red('WebSocket error:'), err);
     });
 

@@ -1352,10 +1352,12 @@
     let reconnectTimer = null;
     let reconnectAttempts = 0;
     const MAX_RECONNECT_DELAY_MS = 5000;
+    const HEARTBEAT_INTERVAL_MS = 20000;
     const MAX_LOG_ENTRIES = 300;
     let currentMainTab = 'config';
     let manualDisconnecting = false;
     let connectionState = 'offline'; // offline | waiting | connected
+    let heartbeatTimer = null;
 
     function nextBridgeSessionId() {
       bridgeSessionCounter += 1;
@@ -1366,6 +1368,27 @@
       if (!reconnectTimer) return;
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+
+    function clearHeartbeatTimer() {
+      if (!heartbeatTimer) return;
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+
+    function startHeartbeat(socket) {
+      clearHeartbeatTimer();
+      heartbeatTimer = setInterval(() => {
+        if (ws !== socket || socket.readyState !== WebSocket.OPEN) {
+          clearHeartbeatTimer();
+          return;
+        }
+        try {
+          socket.send(JSON.stringify({ type: 'system', event: 'heartbeat', ts: Date.now() }));
+        } catch (_) {
+          // Best effort keepalive.
+        }
+      }, HEARTBEAT_INTERVAL_MS);
     }
 
     function scheduleReconnect() {
@@ -1867,6 +1890,7 @@
         return;
       }
       clearReconnectTimer();
+      clearHeartbeatTimer();
       if (ws && ws.readyState === WebSocket.OPEN) {
         try { ws.close(); } catch (_) {}
       }
@@ -1887,6 +1911,7 @@
         socket.onopen = () => {
           if (ws !== socket) return;
           reconnectAttempts = 0;
+          startHeartbeat(socket);
           log(t('connectedRelayWaiting'), 'success');
           // 更新 UI 状态为等待 channel
           statusEl.classList.add('processing');
@@ -1910,6 +1935,9 @@
 
           // 处理系统消息
           if (msg.type === 'system') {
+            if (msg.event === 'heartbeat_ack') {
+              return;
+            }
             if (msg.event === 'connected') {
               currentChannelCode = msg.channel;
               channelCodeEl.textContent = currentChannelCode;
@@ -1967,6 +1995,7 @@
         
         socket.onclose = () => {
           if (ws !== socket) return;
+          clearHeartbeatTimer();
           log(t('relayDisconnected'), 'warning');
           ws = null;
           currentChannelCode = null;
@@ -1982,6 +2011,7 @@
         
         socket.onerror = (error) => {
           if (ws !== socket) return;
+          clearHeartbeatTimer();
           log(t('relayConnectFailed'), 'error');
           revealRelayHelp(t('relayFailedHint'));
           showDisconnected();
@@ -2172,24 +2202,24 @@
 
     function disconnect() {
       clearReconnectTimer();
+      clearHeartbeatTimer();
       reconnectAttempts = 0;
-      if (ws) {
-        const socket = ws;
-        manualDisconnecting = true;
+      const socket = ws;
+      const sessionId = currentBridgeSessionId || undefined;
+      manualDisconnecting = true;
+      ws = null;
+      currentChannelCode = null;
+      currentBridgeSessionId = null;
+      showDisconnected();
+      parent.postMessage({ pluginMessage: { type: 'relay-disconnected', sessionId } }, '*');
+      if (socket) {
         try {
           socket.close();
         } catch (_) {
-          manualDisconnecting = false;
-          ws = null;
-          currentChannelCode = null;
-          currentBridgeSessionId = null;
-          showDisconnected();
-          parent.postMessage({ pluginMessage: { type: 'relay-disconnected' } }, '*');
+          // Ignore close errors because local state is already reset.
         }
-      } else {
-        showDisconnected();
-        parent.postMessage({ pluginMessage: { type: 'relay-disconnected' } }, '*');
       }
+      manualDisconnecting = false;
     }
 
     function toggleMcpConfigCard() {
@@ -2230,6 +2260,7 @@
     }
 
     function showDisconnected() {
+      clearHeartbeatTimer();
       statusEl.classList.remove('connected', 'processing');
       connectionState = 'offline';
       refreshConnectionStatusLabel();

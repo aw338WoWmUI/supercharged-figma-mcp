@@ -3649,21 +3649,20 @@ figma.ui.onmessage = async (msg) => {
             break;
         case 'ws-disconnected':
         case 'relay-disconnected':
-            // Ignore stale disconnects from any other session.
-            // If current active session is null, a disconnect with explicit sessionId is still stale.
-            if (msg.sessionId && msg.sessionId !== activeBridgeSessionId) {
+            // Ignore stale disconnects only when both sides have concrete but different session ids.
+            if (msg.sessionId && activeBridgeSessionId && msg.sessionId !== activeBridgeSessionId) {
                 bridgeLog(`ignore stale disconnect session=${String(msg.sessionId)} active=${String(activeBridgeSessionId || '-')}`, 'info');
                 break;
             }
-            if (pendingDisconnectTimer)
+            if (pendingDisconnectTimer) {
                 clearTimeout(pendingDisconnectTimer);
+                pendingDisconnectTimer = null;
+            }
             bridgeLog(`disconnect requested for session=${String(activeBridgeSessionId || '-')}`, 'warning');
-            pendingDisconnectTimer = setTimeout(() => {
-                isConnected = false;
-                bridgeLog(`disconnected session=${String(activeBridgeSessionId || '-')}`, 'warning');
-                activeBridgeSessionId = null;
-                figma.notify('Disconnected from AI Agent');
-            }, 700);
+            isConnected = false;
+            bridgeLog(`disconnected session=${String(activeBridgeSessionId || msg.sessionId || '-')}`, 'warning');
+            activeBridgeSessionId = null;
+            figma.notify('Disconnected from AI Agent');
             break;
         case 'ws-message':
         case 'relay-message':
