@@ -1,6 +1,6 @@
 {
   "name": "supercharged-figma-mcp",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Supercharged Figma MCP Server with full automation support",
   "main": "dist/server.js",
   "type": "module",
@@ -13,6 +13,10 @@
     "dist/types.js",
     "dist/runtime/embedded-relay.js",
     "dist/runtime/instance-manager.js",
+    "deploy/cloudflare/README.md",
+    "deploy/cloudflare/fallback-tools.ts",
+    "deploy/cloudflare/worker-relay.ts",
+    "deploy/cloudflare/wrangler.toml",
     "README.md",
     "SECURITY.md",
     "USER_GUIDE.md",

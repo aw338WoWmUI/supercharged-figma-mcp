@@ -10,6 +10,7 @@ import { FULL_TOOLS_FALLBACK } from './fallback-tools.js';
 export interface Env {
   RELAY_ROOM: DurableObjectNamespace;
   MCP_API_KEYS?: string;
+  ALLOW_OPEN_MCP?: string;
   WORKER_VERSION?: string;
 }
 
@@ -18,6 +19,13 @@ const MCP_PATH = '/mcp';
 const DEFAULT_WORKER_VERSION = 'dev';
 const WS_OPEN = 1;
 const FIGMA_HEARTBEAT_TIMEOUT_MS = 75_000;
+const MAX_CHANNEL_LENGTH = 64;
+const MAX_CLIENTS_PER_ROOM = 4;
+const MAX_PENDING_BRIDGE_REQUESTS = 25;
+const MAX_BRIDGE_TIMEOUT_MS = 90_000;
+const CLIENT_WAIT_FOR_FIGMA_MS = 30_000;
+const CLIENT_IDLE_MS = 5 * 60_000;
+const CHANNEL_PATTERN = /^[A-Za-z0-9_-]{4,64}$/;
 
 function resolveWorkerVersion(env: Env): string {
   const configured = env.WORKER_VERSION?.trim();
@@ -38,6 +46,16 @@ const sessions = new Map<string, SessionContext>();
 
 function generateChannelCode(): string {
   return Math.random().toString(36).slice(2, 10).toUpperCase();
+}
+
+function isOpenModeAllowed(env: Env): boolean {
+  return env.ALLOW_OPEN_MCP?.trim().toLowerCase() === 'true';
+}
+
+function normalizeChannel(raw: string | null): string | null {
+  const value = raw?.trim();
+  if (!value || value.length > MAX_CHANNEL_LENGTH || !CHANNEL_PATTERN.test(value)) return null;
+  return value;
 }
 
 const BASE_TOOLS: Tool[] = [
@@ -115,7 +133,7 @@ function parseApiKeys(env: Env): string[] {
 
 function isAuthorized(request: Request, env: Env): boolean {
   const keys = parseApiKeys(env);
-  if (keys.length === 0) return true; // open mode
+  if (keys.length === 0) return isOpenModeAllowed(env);
 
   const auth = request.headers.get('authorization') || '';
   const match = auth.match(/^Bearer\s+(.+)$/i);
@@ -286,6 +304,7 @@ export default {
         mcpPath: MCP_PATH,
         activeSessions: sessions.size,
         authEnabled: parseApiKeys(env).length > 0,
+        openMcpAllowed: isOpenModeAllowed(env),
       });
     }
 
@@ -342,7 +361,7 @@ export default {
     }
 
     const clientType = url.searchParams.get('type') || 'unknown';
-    let channel = url.searchParams.get('channel');
+    let channel = normalizeChannel(url.searchParams.get('channel'));
 
     // Keep legacy flow: plugin can connect without channel and get one assigned by server.
     if (!channel && clientType === 'figma') {
@@ -351,7 +370,7 @@ export default {
     }
 
     if (!channel) {
-      return new Response('channel is required (or connect as type=figma to auto-generate)', { status: 400 });
+      return new Response('valid channel is required (4-64 chars: letters, numbers, _ or -; type=figma may omit channel)', { status: 400 });
     }
 
     const roomId = env.RELAY_ROOM.idFromName(channel);
@@ -365,6 +384,7 @@ export class RelayRoomDO {
   private figmaChannel: string | null = null;
   private figmaHeartbeatTimer: number | null = null;
   private clients = new Set<WebSocket>();
+  private clientTimers = new Map<WebSocket, number>();
   private pending = new Map<string, {
     resolve: (value: unknown) => void;
     reject: (reason: Error) => void;
@@ -383,6 +403,41 @@ export class RelayRoomDO {
     if (this.figmaHeartbeatTimer === null) return;
     clearTimeout(this.figmaHeartbeatTimer);
     this.figmaHeartbeatTimer = null;
+  }
+
+  private closeSocket(ws: WebSocket, code = 1000, reason = 'closed') {
+    if (ws.readyState !== WS_OPEN) return;
+    try {
+      ws.close(code, reason);
+    } catch {
+      // ignore
+    }
+  }
+
+  private clearClientTimer(ws: WebSocket) {
+    const timer = this.clientTimers.get(ws);
+    if (timer !== undefined) clearTimeout(timer);
+    this.clientTimers.delete(ws);
+  }
+
+  private setClientTimer(ws: WebSocket, ms: number, reason: string) {
+    this.clearClientTimer(ws);
+    const timer = setTimeout(() => {
+      this.clients.delete(ws);
+      this.clientTimers.delete(ws);
+      this.sendJson(ws, { type: 'system', event: 'error', error: reason });
+      this.closeSocket(ws, 1013, reason);
+    }, ms) as unknown as number;
+    this.clientTimers.set(ws, timer);
+  }
+
+  private closeAllClients(code = 1011, reason = 'Figma disconnected') {
+    for (const client of this.clients) {
+      this.clearClientTimer(client);
+      this.sendJson(client, { type: 'system', event: 'figma_disconnected', error: reason });
+      this.closeSocket(client, code, reason);
+    }
+    this.clients.clear();
   }
 
   private resetFigmaHeartbeat(channel: string) {
@@ -411,6 +466,7 @@ export class RelayRoomDO {
       pending.reject(new Error(`Figma disconnected while waiting for ${id}`));
     }
     this.pending.clear();
+    this.closeAllClients(1011, 'Figma disconnected');
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -429,7 +485,7 @@ export class RelayRoomDO {
     }
 
     const clientType = url.searchParams.get('type') || 'unknown';
-    const channel = url.searchParams.get('channel') || 'UNKNOWN';
+    const channel = normalizeChannel(url.searchParams.get('channel')) || 'UNKNOWN';
     const pair = new WebSocketPair();
     const [clientSocket, serverSocket] = Object.values(pair);
     serverSocket.accept();
@@ -446,10 +502,14 @@ export class RelayRoomDO {
       return json({ ok: false, error: 'Invalid JSON body' }, 400);
     }
     const message = body.message;
-    const timeoutMs = typeof body.timeoutMs === 'number' ? body.timeoutMs : 120000;
+    const requestedTimeoutMs = typeof body.timeoutMs === 'number' ? body.timeoutMs : 120000;
+    const timeoutMs = Math.max(1_000, Math.min(requestedTimeoutMs, MAX_BRIDGE_TIMEOUT_MS));
 
     if (!this.isFigmaConnected()) {
       return json({ ok: false, error: 'Figma not connected' }, 409);
+    }
+    if (this.pending.size >= MAX_PENDING_BRIDGE_REQUESTS) {
+      return json({ ok: false, error: `Too many pending bridge requests (${this.pending.size})` }, 429);
     }
     if (!message || typeof message !== 'object') {
       return json({ ok: false, error: 'message is required' }, 400);
@@ -504,6 +564,9 @@ export class RelayRoomDO {
       this.resetFigmaHeartbeat(channel);
       this.sendJson(ws, { type: 'system', event: 'connected', channel });
       this.broadcastClients({ type: 'system', event: 'figma_connected', channel });
+      for (const client of this.clients) {
+        this.setClientTimer(client, CLIENT_IDLE_MS, 'Client idle');
+      }
 
       ws.addEventListener('message', (event: MessageEvent) => {
         this.resetFigmaHeartbeat(channel);
@@ -553,10 +616,26 @@ export class RelayRoomDO {
       return;
     }
 
+    if (this.clients.size >= MAX_CLIENTS_PER_ROOM) {
+      this.sendJson(ws, { type: 'system', event: 'error', error: 'Too many clients for this channel' });
+      this.closeSocket(ws, 1013, 'Too many clients for this channel');
+      return;
+    }
+
     this.clients.add(ws);
     this.sendJson(ws, { type: 'system', event: 'connected', channel, figmaConnected: this.isFigmaConnected() });
+    this.setClientTimer(
+      ws,
+      this.isFigmaConnected() ? CLIENT_IDLE_MS : CLIENT_WAIT_FOR_FIGMA_MS,
+      this.isFigmaConnected() ? 'Client idle' : 'Timed out waiting for Figma'
+    );
 
     ws.addEventListener('message', (event: MessageEvent) => {
+      this.setClientTimer(
+        ws,
+        this.isFigmaConnected() ? CLIENT_IDLE_MS : CLIENT_WAIT_FOR_FIGMA_MS,
+        this.isFigmaConnected() ? 'Client idle' : 'Timed out waiting for Figma'
+      );
       if (this.isFigmaConnected()) {
         try {
           this.figma!.send(event.data);
@@ -566,14 +645,19 @@ export class RelayRoomDO {
         }
       } else {
         this.sendJson(ws, { type: 'system', event: 'error', error: 'Figma not connected' });
+        this.clients.delete(ws);
+        this.clearClientTimer(ws);
+        this.closeSocket(ws, 1011, 'Figma not connected');
       }
     });
 
     ws.addEventListener('close', () => {
       this.clients.delete(ws);
+      this.clearClientTimer(ws);
     });
     ws.addEventListener('error', () => {
       this.clients.delete(ws);
+      this.clearClientTimer(ws);
     });
   }
 

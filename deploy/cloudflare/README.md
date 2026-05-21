@@ -39,11 +39,13 @@ https://<your-worker-domain>/mcp
 - Worker 中 MCP 工具通过 Durable Object 桥接到 Figma 插件。
 - 兼容旧工作流：Figma 插件使用 `type=figma` 且不带 channel 连接时，服务端会自动生成 channel 并在 `connected` 系统消息返回。
 - MCP `/mcp` 已支持多会话：按 `mcp-session-id` 隔离 channel 绑定。
+- Worker Observability 默认开启，用于排查 Workers Logs / client disconnect / Durable Object 错误。
 - 鉴权默认使用 Cloudflare Secret `MCP_API_KEYS`（无需额外数据库）：
   - 仅作用于 `/mcp`
-  - `WS /supercharged-figma/ws` 不要求鉴权（便于插件连接）
-  - 不设置该 secret：开放模式
+  - `WS /supercharged-figma/ws` 不要求鉴权（便于插件连接），但会限制 channel 格式、同房间客户端数、未配对连接等待时间、bridge pending 数和单次等待时长
+  - 不设置该 secret：`/mcp` 默认关闭
   - 设置后：`Authorization: Bearer <API_KEY>` 必填
+  - 如必须兼容开放 MCP，可显式设置 `ALLOW_OPEN_MCP = "true"`，不建议公网生产使用
 
 ## API Key 后端存储建议
 

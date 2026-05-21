@@ -3,7 +3,13 @@ main = "worker-relay.ts"
 compatibility_date = "2025-01-01"
 
 [vars]
-WORKER_VERSION = "1.0.9"
+WORKER_VERSION = "1.0.10"
+# Keep hosted MCP closed unless MCP_API_KEYS is configured or this is explicitly set.
+ALLOW_OPEN_MCP = "false"
+
+[observability]
+enabled = true
+head_sampling_rate = 1.0
 
 [durable_objects]
 bindings = [
